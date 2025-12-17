@@ -1,1 +1,0 @@
-/home/shxqow/Documents/Projects/RCompiler/target/debug/rcompiler: /home/shxqow/Documents/Projects/RCompiler/src/error.rs /home/shxqow/Documents/Projects/RCompiler/src/lib.rs /home/shxqow/Documents/Projects/RCompiler/src/main.rs /home/shxqow/Documents/Projects/RCompiler/src/tokenizer.rs
