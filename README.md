@@ -7,7 +7,51 @@ This the recreation of my old compiler i made in C++, i am recreating it in rust
 Should be a strongly typed language, without classes or oop, but with some sort of namespaces to properly order your code and to improve usability.
 
 ## Syntax
+### 1. Data Types
 
-I am thinking currently if recreating the syntax of my old language, currently since we can't even properly parse math expression it will not be discussed.
-Update: before writing here the syntax full i want to first finish the tokenizer, once i have a working base i will post the syntax here
+| Category | Type Keywords |
+| :--- | :--- |
+| **Signed Integers** | `i8`, `i16`, `i32`, `i64` |
+| **Unsigned Integers** | `u8`, `u16`, `u32`, `u64` |
+| **Boolean** | `bool` |
+| **Character** | `char` |
+| **String** | `str` |
 
+#### Arrays
+Arrays are declared by specifying the base type followed by the size in square brackets:
+> `<type>[<size>]`
+
+---
+
+### 2. Variables and Assignment
+
+All variables must be declared with a type. Statements must end with a semicolon `;`.
+
+```rust
+// Declaration
+i32 my_number;
+u16[5] my_array;
+
+// Assignment
+my_number = 100;
+bool is_running;
+is_running = true;
+```
+
+### 3. If Statements
+Standard conditional blocks based on a boolean condition.
+```rust
+if x > 0 {
+    y = x;
+}
+```
+
+### 4. While Loops
+Repeat code blocks as long as the condition evaluates to true.
+```rust
+while i < 10 {
+    i = i + 1;
+}
+```
+
+**This is a very limited syntax right now i will add more later on as i need it** 
