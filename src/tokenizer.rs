@@ -323,17 +323,8 @@ impl<'a> Tokenizer<'a> {
             self.next().unwrap();
         }
 
-        let literal = &self.source[self.start..self.end];
-
         if dots > 1 {
-            return Err(
-                TokenizerError {
-                    code: ErrorCode::ET001,
-                    span: TokenSpan::new(self.start, self.end, literal),
-                    column: self.column,
-                    line: self.line
-                }
-            );
+            return self.error(ErrorCode::ET001);
         }
 
         let mut invalid_found = false;
@@ -348,36 +339,19 @@ impl<'a> Tokenizer<'a> {
         }
 
         if invalid_found {
-            return Err(TokenizerError {
-                code: ErrorCode::ET002,
-                span: TokenSpan::new(self.start, self.end, &self.source[self.start..self.end]),
-                line: self.line,
-                column: self.column,
-            });
+            return self.error(ErrorCode::ET002);
         }
 
+        let literal: &str = &self.source[self.start..self.end];
         if dots == 0 {
-            return Ok(Some(Token { 
-                kind: TokenKind::IntegerLiteral, 
-                span: TokenSpan::new(self.start, self.end, literal) 
-            }));
+            return self.token(TokenKind::IntegerLiteral);
         }
         else {
             if literal.ends_with('.') {
-                return Err(
-                    TokenizerError {
-                        code: ErrorCode::ET003,
-                        span: TokenSpan::new(self.start, self.end, literal),
-                        column: self.column,
-                        line: self.line
-                    }
-                );
+                return self.error(ErrorCode::ET003);
             }
 
-            return Ok(Some(Token {
-                kind: TokenKind::FloatLiteral,
-                span: TokenSpan::new(self.start, self.end, literal)
-            }))
+            return self.token(TokenKind::FloatLiteral);
         }
     }
 
@@ -391,319 +365,163 @@ impl<'a> Tokenizer<'a> {
             }
         }
 
-        let literal = &self.source[self.start..self.end];
+        let literal: &str = &self.source[self.start..self.end];
 
         if let Some(&keyword) = self.keywords.get(literal) {
-            return Ok(Some(Token {
-                kind: keyword,
-                span: TokenSpan::new(self.start, self.end, literal)
-            }));
+            return self.token(keyword);
         }
         else {
-            return Ok(Some(Token {
-                kind: TokenKind::Identifier,
-                span: TokenSpan::new(self.start, self.end, literal)
-            }));
+            return self.token(TokenKind::Identifier);
         }
     }
     
     fn parse_symbol(&mut self) -> Result<Option<Token<'a>>, TokenizerError<'a>> {
         match self.character {
             '+' => {
-                if self.peek() == Some('=') {
-                    self.next();
-                    Ok(Some(Token { 
-                        kind: TokenKind::AddAssignment, 
-                        span: TokenSpan::new(self.start, self.end, "+=")
-                    }))
+                if self.match_next('=') {
+                    self.token(TokenKind::AddAssignment)
                 }
                 else {
-                    Ok(Some(Token {
-                        kind: TokenKind::Plus,
-                        span: TokenSpan::new(self.start, self.end, "+")
-                    }))
+                    self.token(TokenKind::Plus)
                 }
             },
 
             '-' => {
-                if self.peek() == Some('=') {
-                    self.next();
-                    Ok(Some(Token { 
-                        kind: TokenKind::SubtractAssignment, 
-                        span: TokenSpan::new(self.start, self.end, "-=")
-                    }))
+                if self.match_next('=') {
+                    self.token(TokenKind::SubtractAssignment)
                 }
                 else {
-                    Ok(Some(Token {
-                        kind: TokenKind::Minus,
-                        span: TokenSpan::new(self.start, self.end, "-")
-                    }))
+                    self.token(TokenKind::Minus)
                 }
             },
             
             '*' => {
-                if self.peek() == Some('=') {
-                    self.next();
-                    Ok(Some(Token { 
-                        kind: TokenKind::MultiplyAssignment, 
-                        span: TokenSpan::new(self.start, self.end, "*=")
-                    }))
+                if self.match_next('=') {
+                    self.token(TokenKind::MultiplyAssignment)
                 }
                 else {
-                    Ok(Some(Token {
-                        kind: TokenKind::Multiplication,
-                        span: TokenSpan::new(self.start, self.end, "*")
-                    }))
+                    self.token(TokenKind::Multiplication)
                 }
             },
 
             '/' => {
-                if self.peek() == Some('=') {
-                    self.next();
-                    Ok(Some(Token { 
-                        kind: TokenKind::DivideAssignment, 
-                        span: TokenSpan::new(self.start, self.end, "/=")
-                    }))
+                if self.match_next('=') {
+                    self.token(TokenKind::DivideAssignment)
                 }
                 else {
-                    Ok(Some(Token {
-                        kind: TokenKind::Division,
-                        span: TokenSpan::new(self.start, self.end, "/")
-                    }))
+                    self.token(TokenKind::Division)
                 }
             },
 
             '%' => {
-                if self.peek() == Some('=') {
-                    self.next();
-                    Ok(Some(Token { 
-                        kind: TokenKind::ModulusAssignment, 
-                        span: TokenSpan::new(self.start, self.end, "%=")
-                    }))
+                if self.match_next('=') {
+                    self.token(TokenKind::ModulusAssignment)
                 }
                 else {
-                    Ok(Some(Token {
-                        kind: TokenKind::Modulus,
-                        span: TokenSpan::new(self.start, self.end, "%")
-                    }))
+                    self.token(TokenKind::Modulus)
                 }
             },
 
             '&' => {
-                if self.peek() == Some('=') {
-                    self.next();
-                    Ok(Some(Token { 
-                        kind: TokenKind::BitwiseAndAssignment, 
-                        span: TokenSpan::new(self.start, self.end, "&=")
-                    }))
+                if self.match_next('=') {
+                    self.token(TokenKind::BitwiseAndAssignment)
                 }
-                else if self.peek() == Some('&') {
-                    self.next();
-                    Ok(Some(Token {
-                        kind: TokenKind::And,
-                        span: TokenSpan::new(self.start, self.end, "&&")
-                    }))
+                else if self.match_next('&') {
+                    self.token(TokenKind::And)
                 }
                 else {
-                    Ok(Some(Token {
-                        kind: TokenKind::BitwiseAnd,
-                        span: TokenSpan::new(self.start, self.end, "&")
-                    }))
+                    self.token(TokenKind::BitwiseAnd)
                 }
             },
 
             '|' => {
-                if self.peek() == Some('=') {
-                    self.next();
-                    Ok(Some(Token { 
-                        kind: TokenKind::BitwiseOrAssignment, 
-                        span: TokenSpan::new(self.start, self.end, "|=")
-                    }))
+                if self.match_next('=') {
+                    self.token(TokenKind::BitwiseOrAssignment)
                 }
-                else if self.peek() == Some('|') {
-                    self.next();
-                    Ok(Some(Token {
-                        kind: TokenKind::Or,
-                        span: TokenSpan::new(self.start, self.end, "||")
-                    }))
+                else if self.match_next('|') {
+                    self.token(TokenKind::Or)
                 }
                 else {
-                    Ok(Some(Token {
-                        kind: TokenKind::BitwiseOr,
-                        span: TokenSpan::new(self.start, self.end, "|")
-                    }))
+                    self.token(TokenKind::BitwiseOr)
                 }
             },
 
             '^' => {
-                if self.peek() == Some('=') {
-                    self.next();
-                    Ok(Some(Token { 
-                        kind: TokenKind::BitwiseXorAssignment, 
-                        span: TokenSpan::new(self.start, self.end, "^=")
-                    }))
+                if self.match_next('=') {
+                    self.token(TokenKind::BitwiseXorAssignment)
                 }
                 else {
-                    Ok(Some(Token {
-                        kind: TokenKind::BitwiseXor,
-                        span: TokenSpan::new(self.start, self.end, "^")
-                    }))
+                    self.token(TokenKind::BitwiseXor)
                 }
             },
 
             '=' => {
-                if self.peek() == Some('=') {
-                    self.next();
-                    Ok(Some(Token { 
-                        kind: TokenKind::Equal, 
-                        span: TokenSpan::new(self.start, self.end, "==")
-                    }))
+                if self.match_next('=') {
+                    self.token(TokenKind::Equal)
                 }
                 else {
-                    Ok(Some(Token {
-                        kind: TokenKind::Assignment,
-                        span: TokenSpan::new(self.start, self.end, "=")
-                    }))
+                    self.token(TokenKind::Assignment)
                 }
             },
 
             '!' => {
-                if self.peek() == Some('=') {
-                    self.next();
-                    Ok(Some(Token { 
-                        kind: TokenKind::NotEqual, 
-                        span: TokenSpan::new(self.start, self.end, "!=")
-                    }))
+                if self.match_next('=') {
+                    self.token(TokenKind::NotEqual)
                 }
                 else {
-                    Ok(Some(Token {
-                        kind: TokenKind::Not,
-                        span: TokenSpan::new(self.start, self.end, "!")
-                    }))
+                    self.token(TokenKind::Not)
                 }
             },
 
             '<' => {
-                if self.peek() == Some('<') {
-                    self.next();
-                    if self.peek() == Some('=') {
-                        self.next();
-                        Ok(Some(Token { 
-                            kind: TokenKind::BitwiseLShiftAssignment, 
-                            span: TokenSpan::new(self.start, self.end, "<<=")
-                        }))
+                if self.match_next('<') {
+                    if self.match_next('=') {
+                        self.token(TokenKind::BitwiseLShiftAssignment)
                     }
                     else {
-                        Ok(Some(Token { 
-                            kind: TokenKind::BitwiseLShift, 
-                            span: TokenSpan::new(self.start, self.end, "<<")
-                        }))
+                        self.token(TokenKind::BitwiseLShift)
                     }
                 }
-                else if self.peek() == Some('=') {
-                    self.next();
-                    Ok(Some(Token { 
-                        kind: TokenKind::LessThanOrEqual, 
-                        span: TokenSpan::new(self.start, self.end, "<=")
-                    }))
+                else if self.match_next('=') {
+                    self.token(TokenKind::LessThanOrEqual)
                 }
                 else {
-                    Ok(Some(Token {
-                        kind: TokenKind::LessThan,
-                        span: TokenSpan::new(self.start, self.end, "<")
-                    }))
+                    self.token(TokenKind::LessThan)
                 }
             },
 
             '>' => {
-                if self.peek() == Some('>') {
-                    self.next();
-                    if self.peek() == Some('=') {
-                        self.next();
-                        Ok(Some(Token { 
-                            kind: TokenKind::BitwiseRShiftAssignment, 
-                            span: TokenSpan::new(self.start, self.end, ">>=")
-                        }))
+                if self.match_next('>') {
+                    if self.match_next('=') {
+                        self.token(TokenKind::BitwiseRShiftAssignment)
                     }
                     else {
-                        Ok(Some(Token { 
-                            kind: TokenKind::BitwiseRShift, 
-                            span: TokenSpan::new(self.start, self.end, ">>")
-                        }))
+                        self.token(TokenKind::BitwiseRShift)
                     }
                 }
-                else if self.peek() == Some('=') {
-                    self.next();
-                    Ok(Some(Token { 
-                        kind: TokenKind::GreaterThanOrEqual, 
-                        span: TokenSpan::new(self.start, self.end, ">=")
-                    }))
+                else if self.match_next('=') {
+                    self.token(TokenKind::GreaterThanOrEqual)
                 }
                 else {
-                    Ok(Some(Token {
-                        kind: TokenKind::GreaterThan,
-                        span: TokenSpan::new(self.start, self.end, ">")
-                    }))
+                    self.token(TokenKind::GreaterThan)
                 }
             },
 
-            '(' => Ok(Some(Token { 
-                kind: TokenKind::LeftParen, 
-                span: TokenSpan::new(self.start, self.end, "(")
-            })),
-
-            ')' => Ok(Some(Token { 
-                kind: TokenKind::RightParen, 
-                span: TokenSpan::new(self.start, self.end, ")")
-            })),
-            
-            '[' => Ok(Some(Token { 
-                kind: TokenKind::LeftBracket, 
-                span: TokenSpan::new(self.start, self.end, "[")
-            })),
-
-            ']' => Ok(Some(Token {
-                kind: TokenKind::RightBracket, 
-                span: TokenSpan::new(self.start, self.end, "]")
-            })),
-            
-            '{' => Ok(Some(Token { 
-                kind: TokenKind::LeftBrace, 
-                span: TokenSpan::new(self.start, self.end, "{")
-            })),
-
-            '}' => Ok(Some(Token { 
-                kind: TokenKind::RightBrace, 
-                span: TokenSpan::new(self.start, self.end, "}")
-            })),
-
-            ',' => Ok(Some(Token { 
-                kind: TokenKind::Comma, 
-                span: TokenSpan::new(self.start, self.end, ",")
-            })),
-
-            '.' => Ok(Some(Token { 
-                kind: TokenKind::Dot, 
-                span: TokenSpan::new(self.start, self.end, ".")
-            })),
-
-            ';' => Ok(Some(Token { 
-                kind: TokenKind::Semicolon, 
-                span: TokenSpan::new(self.start, self.end, ";")
-            })),
+            '(' => self.token(TokenKind::LeftParen),
+            ')' => self.token(TokenKind::RightParen),
+            '[' => self.token(TokenKind::LeftBracket),
+            ']' => self.token(TokenKind::RightBracket),
+            '{' => self.token(TokenKind::LeftBrace),
+            '}' => self.token(TokenKind::RightBrace),
+            ',' => self.token(TokenKind::Comma),
+            '.' => self.token(TokenKind::Dot),
+            ';' => self.token(TokenKind::Semicolon),
 
             '\'' => self.parse_char(),
- 
             '\"' => self.parse_string(),
-
             '#' => self.parse_comment(),
 
-            _ => Err(TokenizerError {
-                code: ErrorCode::ET004,
-                span: TokenSpan::new(self.start, self.end, &self.source[self.start..self.end]),
-                line: self.line,
-                column: self.column
-            })
+            _ => self.error(ErrorCode::ET004)
         }
     }
 
@@ -714,23 +532,12 @@ impl<'a> Tokenizer<'a> {
         while let Some(next) = self.peek() {
             if next == '\''{
                 self.next().unwrap();
-                let literal = &self.source[self.start..self.end];
 
                 if chars_count > 1 {
-                    return Err(TokenizerError {
-                        code: ErrorCode::ET005,
-                        span: TokenSpan::new(self.start, self.end, literal),
-                        line: self.line,
-                        column: self.column
-                    });
+                    return self.error(ErrorCode::ET005);
                 }
                 else if chars_count == 0 {
-                    return Err(TokenizerError {
-                        code: ErrorCode::ET006,
-                        span: TokenSpan::new(self.start, self.end, literal),
-                        line: self.line,
-                        column: self.column
-                    });
+                    return self.error(ErrorCode::ET006);
                 }
 
                 is_escaping_single_quote = false;
@@ -746,29 +553,16 @@ impl<'a> Tokenizer<'a> {
             chars_count += 1;
         }
 
-        let literal = &self.source[self.start..self.end];
+        let literal: &str = &self.source[self.start..self.end];
 
         if !literal.ends_with('\'') || literal.len() == 1  {
-            return Err(TokenizerError {
-                code: ErrorCode::ET007,
-                span: TokenSpan::new(self.start, self.end, literal),
-                line: self.line,
-                column: self.column
-            })
+            return self.error(ErrorCode::ET007);
         }
         else if is_escaping_single_quote {
-            return Err(TokenizerError {
-                code: ErrorCode::ET008,
-                span: TokenSpan::new(self.start, self.end, literal),
-                line: self.line,
-                column: self.column
-            })
+            return self.error(ErrorCode::ET008);
         }
 
-        Ok(Some(Token {
-            kind: TokenKind::CharLiteral,
-            span: TokenSpan::new(self.start, self.end, literal)
-        }))
+        self.token(TokenKind::CharLiteral)
     }
 
     fn parse_inner_char(&mut self) -> Result<bool, TokenizerError<'a>> {
@@ -797,12 +591,7 @@ impl<'a> Tokenizer<'a> {
 
                 'x' => self.parse_hex()?,
 
-                _ => return Err(TokenizerError {
-                    code: ErrorCode::ET009,
-                    span: TokenSpan::new(self.start, self.end, &self.source[self.start..self.end]),
-                    line: self.line,
-                    column: self.column
-                }),
+                _ => return self.error(ErrorCode::ET009),
             };
         }
 
@@ -823,12 +612,7 @@ impl<'a> Tokenizer<'a> {
         while let Some(next) = self.peek() {
             if next == '\'' || (self.is_parsing_string_literal && next == '\"') {
                 if is_invalid || digit_count > 3 {
-                    return Err(TokenizerError {
-                        code: ErrorCode::ET010,
-                        span: TokenSpan::new(self.start, self.end, &self.source[self.start..self.end]),
-                        line: self.line,
-                        column: self.column
-                    });
+                    return self.error(ErrorCode::ET010);
                 }
                 break;
             }
@@ -851,12 +635,7 @@ impl<'a> Tokenizer<'a> {
         while let Some(next) = self.peek() {
             if next == '\'' || (self.is_parsing_string_literal && next == '\"') {
                 if digit_count > 2 || digit_count == 0 || is_invalid {
-                    return Err(TokenizerError {
-                        code: ErrorCode::ET011,
-                        span: TokenSpan::new(self.start, self.end, &self.source[self.start..self.end]),
-                        line: self.line,
-                        column: self.column
-                    });
+                    return self.error(ErrorCode::ET011);
                 }
                 break;
             }
@@ -891,23 +670,15 @@ impl<'a> Tokenizer<'a> {
             }
         }
 
-        let literal = &self.source[self.start..self.end];
+        let literal: &str = &self.source[self.start..self.end];
 
         if !literal.ends_with('\"') || literal.len() == 1 {
-            return Err(TokenizerError {
-                code: ErrorCode::ET012,
-                span: TokenSpan::new(self.start, self.end, literal),
-                line: self.line,
-                column: self.column
-            })
+            return self.error(ErrorCode::ET012);
         }
 
         self.is_parsing_string_literal = false;
 
-        Ok(Some(Token {
-            kind: TokenKind::StringLiteral,
-            span: TokenSpan::new(self.start, self.end, literal)
-        }))
+        self.token(TokenKind::StringLiteral)
     }
 
     fn parse_comment(&mut self) -> Result<Option<Token<'a>>, TokenizerError<'a>> {
@@ -943,6 +714,32 @@ impl<'a> Tokenizer<'a> {
         match self.input.peek() {
             Some(c) => Some(*c),
             None => None
+        }
+    }
+
+    fn token(&self, kind: TokenKind) -> Result<Option<Token<'a>>, TokenizerError<'a>> {
+        Ok(Some(Token {
+            kind,
+            span: TokenSpan::new(self.start, self.end, &self.source[self.start..self.end]),
+        }))
+    }
+
+    fn error<T>(&self, code: ErrorCode) -> Result<T, TokenizerError<'a>> {
+        Err(TokenizerError {
+            code,
+            span: TokenSpan::new(self.start, self.end, &self.source[self.start..self.end]),
+            line: self.line,
+            column: self.column,
+        })
+    }
+
+    fn match_next(&mut self, expected: char) -> bool {
+        if self.peek() == Some(expected) {
+            self.next();
+            return true
+        } 
+        else {
+            return false;
         }
     }
 }
