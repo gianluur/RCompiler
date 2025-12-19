@@ -29,14 +29,18 @@ fn get_source_code() -> (String, String) {
 
 fn main() {
     let (file, contents) = get_source_code();
+
     println!("=== Tokenizer Start ===");
     match Tokenizer::new(&contents).tokenize() {
-        Ok(tokens) => for token in tokens { println!("{}", token) },
+        Ok(tokens) => {
+            for token in tokens { 
+                println!("{}", token) 
+            }
+        },
         Err(error) => {
-            let diagnostic: Diagnostic = error.to_diagnostic(file);
+            let diagnostic: Diagnostic = error.to_diagnostic(&file);
             diagnostic.print();
         }
     }
     println!("=== Tokenizer End ===");    
 }
-

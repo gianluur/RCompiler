@@ -60,6 +60,9 @@ pub enum TokenKind {
     UnsignedInt64,
     Float32,
     Float64,
+    Boolean,
+    Character,
+    String,
     If,
     ElseIf,
     Else,
@@ -76,105 +79,106 @@ impl fmt::Display for TokenKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Eof => write!(f, "EOF"),
-            Self::Comma => write!(f, "Comma"),
-            Self::Dot => write!(f, "Dot"),
-            Self::Semicolon => write!(f, "Semicolon"),
+            Self::Comma => write!(f, ","),
+            Self::Dot => write!(f, "."),
+            Self::Semicolon => write!(f, ";"),
             Self::IntegerLiteral => write!(f, "IntegerLiteral"),
             Self::FloatLiteral => write!(f, "FloatLiteral"),
             Self::CharLiteral => write!(f, "CharLiteral"),
             Self::StringLiteral => write!(f, "StringLiteral"),
-            Self::Plus => write!(f, "Plus"),
-            Self::Minus => write!(f, "Minus"),
-            Self::Multiplication => write!(f, "Multiplication"),
-            Self::Division => write!(f, "Division"),
-            Self::Modulus => write!(f, "Modulus"),
-            Self::LeftParen => write!(f, "LeftParen"),
-            Self::RightParen => write!(f, "RightParen"),
-            Self::LeftBracket => write!(f, "LeftBracket"),
-            Self::RightBracket => write!(f, "RightBracket"),
-            Self::LeftBrace => write!(f, "LeftBrace"),
-            Self::RightBrace => write!(f, "RightBrace"),
-            Self::BitwiseAnd => write!(f, "BitwiseAnd"),
-            Self::BitwiseOr => write!(f, "BitwiseOr"),
-            Self::BitwiseXor => write!(f, "BitwiseXor"),
-            Self::BitwiseLShift => write!(f, "BitwiseLShift"),
-            Self::BitwiseRShift => write!(f, "BitwiseRShift"),
-            Self::And => write!(f, "And"),
-            Self::Or => write!(f, "Or"),
-            Self::Not => write!(f, "Not"),
-            Self::Equal => write!(f, "Equal"),
-            Self::NotEqual => write!(f, "NotEqual"),
-            Self::GreaterThan => write!(f, "GreaterThan"),
-            Self::LessThan => write!(f, "LessThan"),
-            Self::GreaterThanOrEqual => write!(f, "GreaterThanOrEqual"),
-            Self::LessThanOrEqual => write!(f, "LessThanOrEqual"),
-            Self::Assignment => write!(f, "Assignment"),
-            Self::AddAssignment => write!(f, "AddAssignment"),
-            Self::SubtractAssignment => write!(f, "SubtractAssignment"),
-            Self::MultiplyAssignment => write!(f, "MultiplyAssignment"),
-            Self::DivideAssignment => write!(f, "DivideAssignment"),
-            Self::ModulusAssignment => write!(f, "ModulusAssignment"),
-            Self::BitwiseAndAssignment => write!(f, "BitwiseAndAssignment"),
-            Self::BitwiseOrAssignment => write!(f, "BitwiseOrAssignment"),
-            Self::BitwiseXorAssignment => write!(f, "BitwiseXorAssignment"),
-            Self::BitwiseLShiftAssignment => write!(f, "BitwiseLShiftAssignment"),
-            Self::BitwiseRShiftAssignment => write!(f, "BitwiseRShiftAssignment"),
+            Self::Plus => write!(f, "+"),
+            Self::Minus => write!(f, "-"),
+            Self::Multiplication => write!(f, "*"),
+            Self::Division => write!(f, "/"),
+            Self::Modulus => write!(f, "%"),
+            Self::LeftParen => write!(f, "("),
+            Self::RightParen => write!(f, ")"),
+            Self::LeftBracket => write!(f, "["),
+            Self::RightBracket => write!(f, "]"),
+            Self::LeftBrace => write!(f, "{{"),
+            Self::RightBrace => write!(f, "}}"),
+            Self::BitwiseAnd => write!(f, "&"),
+            Self::BitwiseOr => write!(f, "|"),
+            Self::BitwiseXor => write!(f, "^"),
+            Self::BitwiseLShift => write!(f, ">>"),
+            Self::BitwiseRShift => write!(f, "<<"),
+            Self::And => write!(f, "&&"),
+            Self::Or => write!(f, "||"),
+            Self::Not => write!(f, "!"),
+            Self::Equal => write!(f, "=="),
+            Self::NotEqual => write!(f, "!="),
+            Self::GreaterThan => write!(f, ">"),
+            Self::LessThan => write!(f, "<LessThan>"),
+            Self::GreaterThanOrEqual => write!(f, ">="),
+            Self::LessThanOrEqual => write!(f, "<="),
+            Self::Assignment => write!(f, "="),
+            Self::AddAssignment => write!(f, "+="),
+            Self::SubtractAssignment => write!(f, "-="),
+            Self::MultiplyAssignment => write!(f, "*="),
+            Self::DivideAssignment => write!(f, "/="),
+            Self::ModulusAssignment => write!(f, "%="),
+            Self::BitwiseAndAssignment => write!(f, "&="),
+            Self::BitwiseOrAssignment => write!(f, "|="),
+            Self::BitwiseXorAssignment => write!(f, "^="),
+            Self::BitwiseLShiftAssignment => write!(f, ">>="),
+            Self::BitwiseRShiftAssignment => write!(f, "<<="),
             Self::Identifier => write!(f, "Identifier"),
-            Self::SignedInt8 => write!(f, "SignedInt8"),
-            Self::SignedInt16 => write!(f, "SignedInt16"),
-            Self::SignedInt32 => write!(f, "SignedInt32"),
-            Self::SignedInt64 => write!(f, "SignedInt64"),
-            Self::UnsignedInt8 => write!(f, "UnsignedInt8"),
-            Self::UnsignedInt16 => write!(f, "UnsignedInt16"),
-            Self::UnsignedInt32 => write!(f, "UnsignedInt32"),
-            Self::UnsignedInt64 => write!(f, "UnsignedInt64"),
-            Self::Float32 => write!(f, "Float32"),
-            Self::Float64 => write!(f, "Float64"),
-            Self::If => write!(f, "If"),
-            Self::ElseIf => write!(f, "ElseIf"),
-            Self::Else => write!(f, "Else"),
-            Self::While => write!(f, "While"),
-            Self::Break => write!(f, "Break"),
-            Self::Continue => write!(f, "Continue"),
-            Self::Function => write!(f, "Function"),
-            Self::Return => write!(f, "Return"),
-            Self::True => write!(f, "True"),
-            Self::False => write!(f, "False"),
+            Self::SignedInt8 => write!(f, "i8"),
+            Self::SignedInt16 => write!(f, "i16"),
+            Self::SignedInt32 => write!(f, "i32"),
+            Self::SignedInt64 => write!(f, "i64"),
+            Self::UnsignedInt8 => write!(f, "u8"),
+            Self::UnsignedInt16 => write!(f, "u16"),
+            Self::UnsignedInt32 => write!(f, "u32"),
+            Self::UnsignedInt64 => write!(f, "u64"),
+            Self::Float32 => write!(f, "f32"),
+            Self::Float64 => write!(f, "f64"),
+            Self::Boolean => write!(f, "bool"),
+            Self::Character => write!(f, "char"),
+            Self::String => write!(f, "str"),
+            Self::If => write!(f, "if"),
+            Self::ElseIf => write!(f, "elif"),
+            Self::Else => write!(f, "else"),
+            Self::While => write!(f, "while"),
+            Self::Break => write!(f, "break"),
+            Self::Continue => write!(f, "continue"),
+            Self::Function => write!(f, "fn"),
+            Self::Return => write!(f, "return"),
+            Self::True => write!(f, "true"),
+            Self::False => write!(f, "false"),
         }
     }
 }
 
-// --- TOKEN SPAN ---
-
 #[derive(Debug, PartialEq)]
-pub struct TokenSpan {
+pub struct TokenSpan<'a> {
     pub start: usize,
     pub end: usize,
-    pub literal: String
+    pub literal: &'a str
 }
 
-impl TokenSpan {
-    pub fn new(start: usize, end: usize, literal: String) -> Self {
+impl<'a> TokenSpan<'a> {
+    pub fn new(start: usize, end: usize, literal: &'a str) -> Self {
         Self { start, end, literal }
     }
 }
 
-impl fmt::Display for TokenSpan {
+impl<'a> fmt::Display for TokenSpan<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.literal)
     }
 }
 
 #[derive(Debug, PartialEq)]
-pub struct TokenizerError {
+pub struct TokenizerError<'a> {
     pub code: ErrorCode,
-    pub span: TokenSpan,
+    pub span: TokenSpan<'a> ,
     pub line: usize,
     pub column: usize
 }
 
-impl TokenizerError {
-    pub fn to_diagnostic(&self, filename: String) -> Diagnostic {
+impl<'a> TokenizerError<'a>  {
+    pub fn to_diagnostic(&'a self, filename: &'a str) -> Diagnostic<'a> {
         Diagnostic {
             kind: DiagnosticKind::Error(self.code),
             info: DiagnosticInfo { 
@@ -186,54 +190,46 @@ impl TokenizerError {
         }
     }
 
-    fn get_hint(&self, code: ErrorCode) -> String {
+    fn get_hint(&self, code: ErrorCode) -> &str {
         match code {
-            // Numeric Literals
-            ErrorCode::ET001 => "remove the extra '.'".to_string(),
-            ErrorCode::ET002 => "add a space between the number and the identifier".to_string(),
-            ErrorCode::ET003 => "add a '0' after the decimal or remove the point".to_string(),
-            
-            // Lexing / Characters
-            ErrorCode::ET004 => "this character is not supported in this position".to_string(),
-            ErrorCode::ET005 => "if you intended to use a string, use double quotes \"\" instead".to_string(),
-            ErrorCode::ET006 => "character literals cannot be empty; maybe you meant ' '?".to_string(),
-            ErrorCode::ET007 => "add a closing single quote (') to end the character literal".to_string(),
-            ErrorCode::ET008 => "escaped quotes like \\' do not count as closing quotes unless preceded by a valid escape".to_string(),
-            
-            // Escape Sequences
-            ErrorCode::ET009 => "valid escapes include \\n, \\r, \\t, \\\\, \\0, \\', and \\\"".to_string(),
-            ErrorCode::ET010 => "octal escapes must be in the range \\000 to \\377".to_string(),
-            ErrorCode::ET011 => "hexadecimal escapes must follow the pattern \\xHH (e.g., \\x1A)".to_string(),
-            
-            // String Literals
-            ErrorCode::ET012 => "add a double quote (\") to the end of this line".to_string(),
+            ErrorCode::ET001 => "remove the extra '.'",
+            ErrorCode::ET002 => "add a space between the number and the identifier",
+            ErrorCode::ET003 => "add a '0' after the decimal or remove the point",
+            ErrorCode::ET004 => "this character is not supported in this position",
+            ErrorCode::ET005 => "if you intended to use a string, use double quotes \"\" instead",
+            ErrorCode::ET006 => "character literals cannot be empty; maybe you meant ' '?",
+            ErrorCode::ET007 => "add a closing single quote (') to end the character literal",
+            ErrorCode::ET008 => "escaped quotes like \\' do not count as closing quotes unless preceded by a valid escape",
+            ErrorCode::ET009 => "valid escapes include \\n, \\r, \\t, \\\\, \\0, \\', and \\\"",
+            ErrorCode::ET010 => "octal escapes must be in the range \\000 to \\377",
+            ErrorCode::ET011 => "hexadecimal escapes must follow the pattern \\xHH (e.g., \\x1A)",
+            ErrorCode::ET012 => "add a double quote (\") to the end of this line",
         }
     }
 }
 
 #[derive(Debug, PartialEq)]
-pub struct Token {
+pub struct Token<'a>  {
     pub kind: TokenKind,
-    pub span: TokenSpan,
+    pub span: TokenSpan<'a> ,
 }
 
-impl fmt::Display for Token {
+impl<'a>  fmt::Display for Token<'a>  {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Kind: {} | Literal: {}", self.kind, self.span)
     }
 }
 
 pub struct Tokenizer<'a> {
-    // Input and a list of all keywords
+    source: &'a str,
     input: Peekable<Chars<'a>>,
     keywords: HashMap<&'a str, TokenKind>,
 
-    // Some general context
     character: char,
-    position: usize,
+    start: usize,
+    end: usize,
     is_parsing_string_literal: bool,
 
-    // Needed for diagnostics
     line: usize,
     column: usize,
 }
@@ -261,13 +257,18 @@ impl<'a> Tokenizer<'a> {
         keywords.insert("u64", TokenKind::UnsignedInt64);
         keywords.insert("f32", TokenKind::Float32);
         keywords.insert("f64", TokenKind::Float64);
+        keywords.insert("char", TokenKind::Character);
+        keywords.insert("str", TokenKind::String);
+        keywords.insert("bool", TokenKind::Boolean);
 
         Self { 
+            source: input,
             input: input.chars().peekable(), 
             keywords,
 
             character: ' ', 
-            position: 0,
+            start: 0,
+            end: 0,
             is_parsing_string_literal: false,
 
             line: 1,
@@ -275,40 +276,41 @@ impl<'a> Tokenizer<'a> {
         }
     }
 
-    pub fn tokenize(&mut self) -> Result<Vec<Token>, TokenizerError> {
-        let mut tokens: Vec<Token> = Vec::new();
+    pub fn tokenize(&mut self) -> Result<Vec<Token<'a>>, TokenizerError<'a>> {
+        let mut tokens: Vec<Token<'a>> = Vec::new();
 
         while let Some(_) = self.next() {
             if self.character.is_whitespace() {
+                self.start = self.end;
                 continue;
             }
-            if let Some(token) = self.get_token(self.position - 1)? {
+            if let Some(token) = self.get_token()? {
                 tokens.push(token);
+                self.start = self.end;
             }
         }
 
         tokens.push(Token {
             kind: TokenKind::Eof,
-            span: TokenSpan::new(self.position, self.position, String::from("")),
+            span: TokenSpan::new(self.end, self.end, ""),
         });
 
         Ok(tokens)
     }
 
-    fn get_token(&mut self, start: usize) -> Result<Option<Token>, TokenizerError> {
+    fn get_token(&mut self) -> Result<Option<Token<'a>>, TokenizerError<'a>> {
         if self.character.is_ascii_digit() {
-            self.parse_number(start)
+            self.parse_number()
         } 
         else if self.character.is_ascii_alphanumeric() || self.character == '_' {
-            self.parse_text(start)
+            self.parse_text()
         }
         else {
-            self.parse_symbol(start)
+            self.parse_symbol()
         }
     }
 
-    fn parse_number(&mut self, start: usize) -> Result<Option<Token>, TokenizerError> {
-        let mut literal: String = String::from(self.character); 
+    fn parse_number(&mut self) -> Result<Option<Token<'a>>, TokenizerError<'a>> {
         let mut dots: i8 = 0; 
 
         while let Some(next) = self.peek() { 
@@ -318,34 +320,37 @@ impl<'a> Tokenizer<'a> {
             if next == '.' {
                 dots += 1;
             }
-            literal.push(self.next().unwrap());
+            self.next().unwrap();
         }
+
+        let literal = &self.source[self.start..self.end];
 
         if dots > 1 {
             return Err(
                 TokenizerError {
                     code: ErrorCode::ET001,
-                    span: TokenSpan::new(start, self.position, literal),
+                    span: TokenSpan::new(self.start, self.end, literal),
                     column: self.column,
                     line: self.line
                 }
             );
         }
 
-        let mut invalid: String = String::from("");
+        let mut invalid_found = false;
         while let Some(next) = self.peek() {
             if next.is_ascii_alphanumeric() || next == '_' {
-                invalid.push(self.next().unwrap());
+                self.next().unwrap();
+                invalid_found = true;
             }
             else {
                 break;
             }
         }
 
-        if invalid.len() > 0 {
+        if invalid_found {
             return Err(TokenizerError {
                 code: ErrorCode::ET002,
-                span: TokenSpan::new(start, self.position, format!("{}{}", literal, invalid)),
+                span: TokenSpan::new(self.start, self.end, &self.source[self.start..self.end]),
                 line: self.line,
                 column: self.column,
             });
@@ -354,7 +359,7 @@ impl<'a> Tokenizer<'a> {
         if dots == 0 {
             return Ok(Some(Token { 
                 kind: TokenKind::IntegerLiteral, 
-                span: TokenSpan::new(start, self.position, literal) 
+                span: TokenSpan::new(self.start, self.end, literal) 
             }));
         }
         else {
@@ -362,7 +367,7 @@ impl<'a> Tokenizer<'a> {
                 return Err(
                     TokenizerError {
                         code: ErrorCode::ET003,
-                        span: TokenSpan::new(start, self.position, literal),
+                        span: TokenSpan::new(self.start, self.end, literal),
                         column: self.column,
                         line: self.line
                     }
@@ -371,50 +376,51 @@ impl<'a> Tokenizer<'a> {
 
             return Ok(Some(Token {
                 kind: TokenKind::FloatLiteral,
-                span: TokenSpan::new(start, self.position, literal)
+                span: TokenSpan::new(self.start, self.end, literal)
             }))
         }
     }
 
-    fn parse_text(&mut self, start: usize) -> Result<Option<Token>, TokenizerError> {
-        let mut literal: String = String::from(self.character);
+    fn parse_text(&mut self) -> Result<Option<Token<'a>>, TokenizerError<'a>> {
         while let Some(next) = self.peek() {
             if next.is_ascii_alphanumeric() || next == '_' {
-                literal.push(self.next().unwrap());
+                self.next().unwrap();
             }
             else {
                 break;
             }
         }
 
-        if let Some(&keyword) = self.keywords.get(&literal.as_str()) {
+        let literal = &self.source[self.start..self.end];
+
+        if let Some(&keyword) = self.keywords.get(literal) {
             return Ok(Some(Token {
                 kind: keyword,
-                span: TokenSpan::new(start, self.position, literal)
+                span: TokenSpan::new(self.start, self.end, literal)
             }));
         }
         else {
             return Ok(Some(Token {
                 kind: TokenKind::Identifier,
-                span: TokenSpan::new(start, self.position, literal)
+                span: TokenSpan::new(self.start, self.end, literal)
             }));
         }
     }
     
-    fn parse_symbol(&mut self, start: usize) -> Result<Option<Token>, TokenizerError> {
+    fn parse_symbol(&mut self) -> Result<Option<Token<'a>>, TokenizerError<'a>> {
         match self.character {
             '+' => {
                 if self.peek() == Some('=') {
                     self.next();
                     Ok(Some(Token { 
                         kind: TokenKind::AddAssignment, 
-                        span: TokenSpan::new(start, self.position, String::from("+="))
+                        span: TokenSpan::new(self.start, self.end, "+=")
                     }))
                 }
                 else {
                     Ok(Some(Token {
                         kind: TokenKind::Plus,
-                        span: TokenSpan::new(start, self.position, String::from("+"))
+                        span: TokenSpan::new(self.start, self.end, "+")
                     }))
                 }
             },
@@ -424,13 +430,13 @@ impl<'a> Tokenizer<'a> {
                     self.next();
                     Ok(Some(Token { 
                         kind: TokenKind::SubtractAssignment, 
-                        span: TokenSpan::new(start, self.position, String::from("-="))
+                        span: TokenSpan::new(self.start, self.end, "-=")
                     }))
                 }
                 else {
                     Ok(Some(Token {
                         kind: TokenKind::Minus,
-                        span: TokenSpan::new(start, self.position, String::from("-"))
+                        span: TokenSpan::new(self.start, self.end, "-")
                     }))
                 }
             },
@@ -440,13 +446,13 @@ impl<'a> Tokenizer<'a> {
                     self.next();
                     Ok(Some(Token { 
                         kind: TokenKind::MultiplyAssignment, 
-                        span: TokenSpan::new(start, self.position, String::from("*="))
+                        span: TokenSpan::new(self.start, self.end, "*=")
                     }))
                 }
                 else {
                     Ok(Some(Token {
                         kind: TokenKind::Multiplication,
-                        span: TokenSpan::new(start, self.position, String::from("*"))
+                        span: TokenSpan::new(self.start, self.end, "*")
                     }))
                 }
             },
@@ -456,13 +462,13 @@ impl<'a> Tokenizer<'a> {
                     self.next();
                     Ok(Some(Token { 
                         kind: TokenKind::DivideAssignment, 
-                        span: TokenSpan::new(start, self.position, String::from("/="))
+                        span: TokenSpan::new(self.start, self.end, "/=")
                     }))
                 }
                 else {
                     Ok(Some(Token {
                         kind: TokenKind::Division,
-                        span: TokenSpan::new(start, self.position, String::from("/"))
+                        span: TokenSpan::new(self.start, self.end, "/")
                     }))
                 }
             },
@@ -472,13 +478,13 @@ impl<'a> Tokenizer<'a> {
                     self.next();
                     Ok(Some(Token { 
                         kind: TokenKind::ModulusAssignment, 
-                        span: TokenSpan::new(start, self.position, String::from("%="))
+                        span: TokenSpan::new(self.start, self.end, "%=")
                     }))
                 }
                 else {
                     Ok(Some(Token {
                         kind: TokenKind::Modulus,
-                        span: TokenSpan::new(start, self.position, String::from("%"))
+                        span: TokenSpan::new(self.start, self.end, "%")
                     }))
                 }
             },
@@ -488,22 +494,20 @@ impl<'a> Tokenizer<'a> {
                     self.next();
                     Ok(Some(Token { 
                         kind: TokenKind::BitwiseAndAssignment, 
-                        span: TokenSpan::new(start, self.position, String::from("&="))
+                        span: TokenSpan::new(self.start, self.end, "&=")
                     }))
                 }
-
                 else if self.peek() == Some('&') {
                     self.next();
                     Ok(Some(Token {
                         kind: TokenKind::And,
-                        span: TokenSpan::new(start, self.position, String::from("&&"))
+                        span: TokenSpan::new(self.start, self.end, "&&")
                     }))
                 }
-
                 else {
                     Ok(Some(Token {
                         kind: TokenKind::BitwiseAnd,
-                        span: TokenSpan::new(start, self.position, String::from("&"))
+                        span: TokenSpan::new(self.start, self.end, "&")
                     }))
                 }
             },
@@ -513,22 +517,20 @@ impl<'a> Tokenizer<'a> {
                     self.next();
                     Ok(Some(Token { 
                         kind: TokenKind::BitwiseOrAssignment, 
-                        span: TokenSpan::new(start, self.position, String::from("|="))
+                        span: TokenSpan::new(self.start, self.end, "|=")
                     }))
                 }
-
                 else if self.peek() == Some('|') {
                     self.next();
                     Ok(Some(Token {
                         kind: TokenKind::Or,
-                        span: TokenSpan::new(start, self.position, String::from("||"))
+                        span: TokenSpan::new(self.start, self.end, "||")
                     }))
                 }
-
                 else {
                     Ok(Some(Token {
                         kind: TokenKind::BitwiseOr,
-                        span: TokenSpan::new(start, self.position, String::from("|"))
+                        span: TokenSpan::new(self.start, self.end, "|")
                     }))
                 }
             },
@@ -538,13 +540,13 @@ impl<'a> Tokenizer<'a> {
                     self.next();
                     Ok(Some(Token { 
                         kind: TokenKind::BitwiseXorAssignment, 
-                        span: TokenSpan::new(start, self.position, String::from("^="))
+                        span: TokenSpan::new(self.start, self.end, "^=")
                     }))
                 }
                 else {
                     Ok(Some(Token {
                         kind: TokenKind::BitwiseXor,
-                        span: TokenSpan::new(start, self.position, String::from("^"))
+                        span: TokenSpan::new(self.start, self.end, "^")
                     }))
                 }
             },
@@ -554,13 +556,13 @@ impl<'a> Tokenizer<'a> {
                     self.next();
                     Ok(Some(Token { 
                         kind: TokenKind::Equal, 
-                        span: TokenSpan::new(start, self.position, String::from("=="))
+                        span: TokenSpan::new(self.start, self.end, "==")
                     }))
                 }
                 else {
                     Ok(Some(Token {
                         kind: TokenKind::Assignment,
-                        span: TokenSpan::new(start, self.position, String::from("="))
+                        span: TokenSpan::new(self.start, self.end, "=")
                     }))
                 }
             },
@@ -570,13 +572,13 @@ impl<'a> Tokenizer<'a> {
                     self.next();
                     Ok(Some(Token { 
                         kind: TokenKind::NotEqual, 
-                        span: TokenSpan::new(start, self.position, String::from("!="))
+                        span: TokenSpan::new(self.start, self.end, "!=")
                     }))
                 }
                 else {
                     Ok(Some(Token {
                         kind: TokenKind::Not,
-                        span: TokenSpan::new(start, self.position, String::from("!"))
+                        span: TokenSpan::new(self.start, self.end, "!")
                     }))
                 }
             },
@@ -584,34 +586,31 @@ impl<'a> Tokenizer<'a> {
             '<' => {
                 if self.peek() == Some('<') {
                     self.next();
-
                     if self.peek() == Some('=') {
                         self.next();
                         Ok(Some(Token { 
                             kind: TokenKind::BitwiseLShiftAssignment, 
-                            span: TokenSpan::new(start, self.position, String::from("<<="))
+                            span: TokenSpan::new(self.start, self.end, "<<=")
                         }))
                     }
                     else {
                         Ok(Some(Token { 
                             kind: TokenKind::BitwiseLShift, 
-                            span: TokenSpan::new(start, self.position, String::from("<<"))
+                            span: TokenSpan::new(self.start, self.end, "<<")
                         }))
                     }
                 }
-
                 else if self.peek() == Some('=') {
                     self.next();
                     Ok(Some(Token { 
                         kind: TokenKind::LessThanOrEqual, 
-                        span: TokenSpan::new(start, self.position, String::from("<="))
+                        span: TokenSpan::new(self.start, self.end, "<=")
                     }))
                 }
-
                 else {
                     Ok(Some(Token {
                         kind: TokenKind::LessThan,
-                        span: TokenSpan::new(start, self.position, String::from("<"))
+                        span: TokenSpan::new(self.start, self.end, "<")
                     }))
                 }
             },
@@ -619,111 +618,108 @@ impl<'a> Tokenizer<'a> {
             '>' => {
                 if self.peek() == Some('>') {
                     self.next();
-
                     if self.peek() == Some('=') {
                         self.next();
                         Ok(Some(Token { 
                             kind: TokenKind::BitwiseRShiftAssignment, 
-                            span: TokenSpan::new(start, self.position, String::from(">>="))
+                            span: TokenSpan::new(self.start, self.end, ">>=")
                         }))
                     }
                     else {
                         Ok(Some(Token { 
                             kind: TokenKind::BitwiseRShift, 
-                            span: TokenSpan::new(start, self.position, String::from(">>"))
+                            span: TokenSpan::new(self.start, self.end, ">>")
                         }))
                     }
                 }
-
                 else if self.peek() == Some('=') {
                     self.next();
                     Ok(Some(Token { 
                         kind: TokenKind::GreaterThanOrEqual, 
-                        span: TokenSpan::new(start, self.position, String::from(">="))
+                        span: TokenSpan::new(self.start, self.end, ">=")
                     }))
                 }
-                
                 else {
                     Ok(Some(Token {
                         kind: TokenKind::GreaterThan,
-                        span: TokenSpan::new(start, self.position, String::from(">"))
+                        span: TokenSpan::new(self.start, self.end, ">")
                     }))
                 }
             },
 
             '(' => Ok(Some(Token { 
                 kind: TokenKind::LeftParen, 
-                span: TokenSpan::new(start, self.position, String::from("("))
+                span: TokenSpan::new(self.start, self.end, "(")
             })),
 
             ')' => Ok(Some(Token { 
                 kind: TokenKind::RightParen, 
-                span: TokenSpan::new(start, self.position, String::from(")"))
+                span: TokenSpan::new(self.start, self.end, ")")
             })),
             
             '[' => Ok(Some(Token { 
                 kind: TokenKind::LeftBracket, 
-                span: TokenSpan::new(start, self.position, String::from("["))
+                span: TokenSpan::new(self.start, self.end, "[")
             })),
 
             ']' => Ok(Some(Token {
                 kind: TokenKind::RightBracket, 
-                span: TokenSpan::new(start, self.position, String::from("]"))
+                span: TokenSpan::new(self.start, self.end, "]")
             })),
             
             '{' => Ok(Some(Token { 
                 kind: TokenKind::LeftBrace, 
-                span: TokenSpan::new(start, self.position, String::from("{"))
+                span: TokenSpan::new(self.start, self.end, "{")
             })),
 
             '}' => Ok(Some(Token { 
                 kind: TokenKind::RightBrace, 
-                span: TokenSpan::new(start, self.position, String::from("}"))
+                span: TokenSpan::new(self.start, self.end, "}")
             })),
 
             ',' => Ok(Some(Token { 
                 kind: TokenKind::Comma, 
-                span: TokenSpan::new(start, self.position, String::from(","))
+                span: TokenSpan::new(self.start, self.end, ",")
             })),
 
             '.' => Ok(Some(Token { 
                 kind: TokenKind::Dot, 
-                span: TokenSpan::new(start, self.position, String::from("."))
+                span: TokenSpan::new(self.start, self.end, ".")
             })),
 
             ';' => Ok(Some(Token { 
                 kind: TokenKind::Semicolon, 
-                span: TokenSpan::new(start, self.position, String::from(";"))
+                span: TokenSpan::new(self.start, self.end, ";")
             })),
 
-            '\'' => self.parse_char(start),
+            '\'' => self.parse_char(),
  
-            '\"' => self.parse_string(start),
+            '\"' => self.parse_string(),
 
             '#' => self.parse_comment(),
 
             _ => Err(TokenizerError {
                 code: ErrorCode::ET004,
-                span: TokenSpan::new(start, self.position, String::from(self.character)),
+                span: TokenSpan::new(self.start, self.end, &self.source[self.start..self.end]),
                 line: self.line,
                 column: self.column
             })
         }
     }
 
-    fn parse_char(&mut self, start: usize) -> Result<Option<Token>, TokenizerError> {
-        let mut literal: String = String::from(self.character);
+    fn parse_char(&mut self) -> Result<Option<Token<'a>>, TokenizerError<'a>> {
         let mut chars_count: u8 = 0;
         let mut is_escaping_single_quote: bool = false;
 
         while let Some(next) = self.peek() {
             if next == '\''{
-                literal.push(self.next().unwrap());
+                self.next().unwrap();
+                let literal = &self.source[self.start..self.end];
 
                 if chars_count > 1 {
                     return Err(TokenizerError {
                         code: ErrorCode::ET005,
-                        span: TokenSpan::new(start, self.position, literal),
+                        span: TokenSpan::new(self.start, self.end, literal),
                         line: self.line,
                         column: self.column
                     });
@@ -731,7 +727,7 @@ impl<'a> Tokenizer<'a> {
                 else if chars_count == 0 {
                     return Err(TokenizerError {
                         code: ErrorCode::ET006,
-                        span: TokenSpan::new(start, self.position, literal),
+                        span: TokenSpan::new(self.start, self.end, literal),
                         line: self.line,
                         column: self.column
                     });
@@ -741,19 +737,21 @@ impl<'a> Tokenizer<'a> {
                 break;
             }
 
-            literal.push(self.next().unwrap());
+            self.next().unwrap();
 
             if next == '\\' {
-                is_escaping_single_quote = self.parse_inner_char(&mut literal)?;
+                is_escaping_single_quote = self.parse_inner_char()?;
             } 
 
             chars_count += 1;
         }
 
+        let literal = &self.source[self.start..self.end];
+
         if !literal.ends_with('\'') || literal.len() == 1  {
             return Err(TokenizerError {
                 code: ErrorCode::ET007,
-                span: TokenSpan::new(start, self.position, literal),
+                span: TokenSpan::new(self.start, self.end, literal),
                 line: self.line,
                 column: self.column
             })
@@ -761,7 +759,7 @@ impl<'a> Tokenizer<'a> {
         else if is_escaping_single_quote {
             return Err(TokenizerError {
                 code: ErrorCode::ET008,
-                span: TokenSpan::new(start, self.position, literal),
+                span: TokenSpan::new(self.start, self.end, literal),
                 line: self.line,
                 column: self.column
             })
@@ -769,22 +767,22 @@ impl<'a> Tokenizer<'a> {
 
         Ok(Some(Token {
             kind: TokenKind::CharLiteral,
-            span: TokenSpan::new(start, self.position, literal)
+            span: TokenSpan::new(self.start, self.end, literal)
         }))
     }
 
-    fn parse_inner_char(&mut self, literal: &mut String) -> Result<bool, TokenizerError> {
+    fn parse_inner_char(&mut self) -> Result<bool, TokenizerError<'a>> {
         if self.character == '\\' {
-            return self.parse_escape_sequence(literal);
+            return self.parse_escape_sequence();
         }
 
-        literal.push(self.next().unwrap());
+        self.next().unwrap();
         return Ok(false)
     }
 
-    fn parse_escape_sequence(&mut self, literal: &mut String) -> Result<bool, TokenizerError> {
+    fn parse_escape_sequence(&mut self) -> Result<bool, TokenizerError<'a>> {
         if let Some(next) = self.peek() {
-            literal.push(self.next().unwrap());
+            self.next().unwrap();
 
             match next {
                 'a' | 'b' | 'f' | 'n' | 
@@ -795,13 +793,13 @@ impl<'a> Tokenizer<'a> {
                     }
                 },
                 
-                '1'..='7' => self.parse_octal(literal)?,
+                '1'..='7' => self.parse_octal()?,
 
-                'x' => self.parse_hex(literal)?,
+                'x' => self.parse_hex()?,
 
                 _ => return Err(TokenizerError {
                     code: ErrorCode::ET009,
-                    span: TokenSpan::new(self.position - literal.len(), self.position, literal.clone()),
+                    span: TokenSpan::new(self.start, self.end, &self.source[self.start..self.end]),
                     line: self.line,
                     column: self.column
                 }),
@@ -818,18 +816,16 @@ impl<'a> Tokenizer<'a> {
         }
     }
 
-    fn parse_octal(&mut self, literal: &mut String) -> Result<(), TokenizerError> {
+    fn parse_octal(&mut self) -> Result<(), TokenizerError<'a>> {
         let mut is_invalid: bool = false;
-        let mut digit_count: u8 = 1; // Starts at 1 because we consumed the first octal digit in parse_escape_sequence
-
-        let start_position = self.position - literal.len(); // Approximate start of the escape sequence
+        let mut digit_count: u8 = 1; 
 
         while let Some(next) = self.peek() {
             if next == '\'' || (self.is_parsing_string_literal && next == '\"') {
                 if is_invalid || digit_count > 3 {
                     return Err(TokenizerError {
                         code: ErrorCode::ET010,
-                        span: TokenSpan::new(start_position, self.position, literal.clone()),
+                        span: TokenSpan::new(self.start, self.end, &self.source[self.start..self.end]),
                         line: self.line,
                         column: self.column
                     });
@@ -841,25 +837,23 @@ impl<'a> Tokenizer<'a> {
                 is_invalid = true;
             }
 
-            literal.push(self.next().unwrap());
+            self.next().unwrap();
             digit_count += 1;
         }
         
         Ok(())
     }
 
-    fn parse_hex(&mut self, literal: &mut String) -> Result<(), TokenizerError> {
+    fn parse_hex(&mut self) -> Result<(), TokenizerError<'a>> {
         let mut is_invalid: bool = false;
         let mut digit_count: u8 = 0;
         
-        let start_position = self.position - literal.len(); // Approximate start of the escape sequence
-
         while let Some(next) = self.peek() {
             if next == '\'' || (self.is_parsing_string_literal && next == '\"') {
                 if digit_count > 2 || digit_count == 0 || is_invalid {
                     return Err(TokenizerError {
                         code: ErrorCode::ET011,
-                        span: TokenSpan::new(start_position, self.position, literal.clone()),
+                        span: TokenSpan::new(self.start, self.end, &self.source[self.start..self.end]),
                         line: self.line,
                         column: self.column
                     });
@@ -874,34 +868,35 @@ impl<'a> Tokenizer<'a> {
                 is_invalid = true;
             }
 
-            literal.push(self.next().unwrap());
+            self.next().unwrap();
             digit_count += 1;
         }
 
         Ok(())
     }
 
-    fn parse_string(&mut self, start: usize) -> Result<Option<Token>, TokenizerError> {
-        let mut literal: String = String::from(self.character);
+    fn parse_string(&mut self) -> Result<Option<Token<'a>>, TokenizerError<'a>> {
         self.is_parsing_string_literal = true;
 
         while let Some(next) = self.peek() {
             if next == '\"' {
-                literal.push(self.next().unwrap());
+                self.next().unwrap();
                 break;
             }
 
-            literal.push(self.next().unwrap());
+            self.next().unwrap();
 
             if next == '\\' {
-                self.parse_inner_char(&mut literal)?; 
+                self.parse_inner_char()?; 
             }
         }
+
+        let literal = &self.source[self.start..self.end];
 
         if !literal.ends_with('\"') || literal.len() == 1 {
             return Err(TokenizerError {
                 code: ErrorCode::ET012,
-                span: TokenSpan::new(start, self.position, literal),
+                span: TokenSpan::new(self.start, self.end, literal),
                 line: self.line,
                 column: self.column
             })
@@ -911,17 +906,16 @@ impl<'a> Tokenizer<'a> {
 
         Ok(Some(Token {
             kind: TokenKind::StringLiteral,
-            span: TokenSpan::new(start, self.position, literal)
+            span: TokenSpan::new(self.start, self.end, literal)
         }))
     }
 
-    fn parse_comment(&mut self) -> Result<Option<Token>, TokenizerError> {
-        let mut literal: String = String::from(self.character);
+    fn parse_comment(&mut self) -> Result<Option<Token<'a>>, TokenizerError<'a>> {
         while let Some(next) = self.peek() {
             if next == '\n' {
                 break;
             }
-            literal.push(self.next().unwrap());
+            self.next().unwrap();
         }
         Ok(None)
     }
@@ -938,7 +932,7 @@ impl<'a> Tokenizer<'a> {
                 }
 
                 self.character = c;
-                self.position += 1;
+                self.end += 1;
                 Some(c)
             }
             None => None

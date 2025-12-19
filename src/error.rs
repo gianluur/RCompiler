@@ -71,10 +71,10 @@ pub enum DiagnosticKind {
 }
 
 impl DiagnosticKind {
-    pub fn kind_to_string(&self) -> String {
+    pub fn kind_to_str(&self) -> &'static str {
         match self {
-            Self::Error(_) => "error".to_string(),
-            // Self::Warning(_) => "warning".to_string()
+            Self::Error(_) => "error",
+            // Self::Warning(_) => "warning"
         }
     }
 
@@ -86,29 +86,29 @@ impl DiagnosticKind {
     }
 
 
-    pub fn message(&self) -> String {
+    pub fn message(&self) -> &'static str {
         match self {
-            Self::Error(code) => code.message().to_string(),
-            //Self::Warning(code) => code.message().to_string(),
+            Self::Error(code) => code.message(),
+            //Self::Warning(code) => code.message(),
         }
     }
 
 }
 
 #[derive(Debug, PartialEq)]
-pub struct DiagnosticInfo {
-    pub filename: String,
+pub struct DiagnosticInfo<'a> {
+    pub filename: &'a str,
     pub line: usize,
     pub column: usize
 }
 
-pub struct Diagnostic {
+pub struct Diagnostic<'a> {
     pub kind: DiagnosticKind,
-    pub info: DiagnosticInfo,
-    pub hint: Option<String>
+    pub info: DiagnosticInfo<'a>,
+    pub hint: Option<&'a str>
 }
 
-impl Diagnostic {
+impl<'a> Diagnostic<'a> {
     pub fn print(&self) {
         let red: &str = "\x1b[31;1m";
         let cyan: &str = "\x1b[36m";
@@ -116,9 +116,9 @@ impl Diagnostic {
         let bold: &str = "\x1b[1m";
         let reset: &str = "\x1b[0m";
 
-        let kind: String = self.kind.kind_to_string();
+        let kind: &str = self.kind.kind_to_str();
         let code: String = self.kind.code_to_string();
-        let message: String = self.kind.message();
+        let message: &str = self.kind.message();
 
         println!("{red}{kind}[{code}]{reset}: {bold}{message}{reset}");
         

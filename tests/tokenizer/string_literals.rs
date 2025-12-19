@@ -5,12 +5,14 @@ use rcompiler::error::ErrorCode;
 mod string_literal_tests {
     use super::*;
 
-    fn get_string_literals(input: &str) -> Result<Vec<String>, TokenizerError> {
-        let tokens = Tokenizer::new(input).tokenize()?;
+    fn get_string_literals<'a>(input: &'a str) -> Result<Vec<&'a str>, TokenizerError<'a>> {
+        let mut tokenizer = Tokenizer::new(input);
+        let tokens = tokenizer.tokenize()?;
         let mut out = Vec::new();
         for t in tokens {
             if matches!(t.kind, TokenKind::StringLiteral) {
-                out.push(t.span.literal.clone());
+                // No clone! We just store the reference (&str)
+                out.push(t.span.literal);
             }
         }
         Ok(out)

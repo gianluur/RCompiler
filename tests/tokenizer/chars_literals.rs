@@ -5,7 +5,7 @@ use rcompiler::error::*;
 mod char_literal_tests {
     use super::*;
 
-    fn tokenize(input: &str) -> Result<Vec<Token>, TokenizerError> {
+    fn tokenize<'a>(input: &'a str) -> Result<Vec<Token<'a>>, TokenizerError<'a>> {
         let mut tokenizer = Tokenizer::new(input);
         tokenizer.tokenize()
     }
