@@ -25,10 +25,11 @@ Arrays are declared by specifying the base type followed by the size in square b
 
 ### 2. Variables and Assignment
 
-All variables must be declared with a type. Statements must end with a semicolon `;`.
+All variables must be declared with a type or preceding it a const specifier. Statements must end with a semicolon `;`.
 
 ```rust
 // Declaration
+const i32 my_const;
 i32 my_number;
 u16[5] my_array;
 

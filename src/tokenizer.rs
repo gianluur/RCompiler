@@ -50,6 +50,7 @@ pub enum TokenKind {
     BitwiseLShiftAssignment,
     BitwiseRShiftAssignment,
     Identifier,
+    Const,
     SignedInt8,
     SignedInt16,
     SignedInt32,
@@ -123,6 +124,7 @@ impl fmt::Display for TokenKind {
             Self::BitwiseLShiftAssignment => write!(f, ">>="),
             Self::BitwiseRShiftAssignment => write!(f, "<<="),
             Self::Identifier => write!(f, "Identifier"),
+            Self::Const => write!(f, "const"),
             Self::SignedInt8 => write!(f, "i8"),
             Self::SignedInt16 => write!(f, "i16"),
             Self::SignedInt32 => write!(f, "i32"),
@@ -150,7 +152,7 @@ impl fmt::Display for TokenKind {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub struct TokenSpan<'a> {
     pub start: usize,
     pub end: usize,
@@ -204,17 +206,18 @@ impl<'a> TokenizerError<'a>  {
             ErrorCode::ET010 => "octal escapes must be in the range \\000 to \\377",
             ErrorCode::ET011 => "hexadecimal escapes must follow the pattern \\xHH (e.g., \\x1A)",
             ErrorCode::ET012 => "add a double quote (\") to the end of this line",
+            _ => ""
         }
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub struct Token<'a>  {
     pub kind: TokenKind,
     pub span: TokenSpan<'a> ,
 }
 
-impl<'a>  fmt::Display for Token<'a>  {
+impl<'a> fmt::Display for Token<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Kind: {} | Literal: {}", self.kind, self.span)
     }
@@ -247,6 +250,7 @@ impl<'a> Tokenizer<'a> {
         keywords.insert("return", TokenKind::Return);
         keywords.insert("true", TokenKind::True);
         keywords.insert("false", TokenKind::False);
+        keywords.insert("const", TokenKind::Const);
         keywords.insert("i8", TokenKind::SignedInt8);
         keywords.insert("i16", TokenKind::SignedInt16);
         keywords.insert("i32", TokenKind::SignedInt32);

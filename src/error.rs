@@ -23,6 +23,12 @@ pub enum ErrorCode {
     ET010,
     ET011,
     ET012,
+    EP001,
+    EP002,
+    EP003,
+    EP004,
+    EP005,
+    EP006,
 }
 
 // #[derive(Debug, PartialEq, Clone, Copy)]
@@ -33,6 +39,8 @@ pub enum ErrorCode {
 impl DiagnosticCode for ErrorCode {
     fn message(&self) -> &'static str {
         match self {
+            // === Tokenizer Errors === //
+            
             // Numeric Literals
             Self::ET001 => "Numeric literal contains multiple decimal points",
             Self::ET002 => "Identifiers cannot immediately follow a numeric literal",
@@ -52,6 +60,16 @@ impl DiagnosticCode for ErrorCode {
             
             // String Literals
             Self::ET012 => "Unterminated string literal: missing closing double quote",
+
+            // === Parser Errors === //
+            Self::EP001 => "Expected array size inside brackets",
+            Self::EP002 => "Expected closing bracket after array size",
+            Self::EP003 => "Expected a name after type in variable declaration",
+            Self::EP004 => "Expected a value after assignment in variable declaration",
+            Self::EP005 => "Expected a semicolon after variable declaration",
+            Self::EP006 => "Expected a either a semi colon or an assignment after name in variable declaration",
+            
+
         }
     }
 }
