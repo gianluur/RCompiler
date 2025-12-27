@@ -29,6 +29,16 @@ pub enum ErrorCode {
     EP004,
     EP005,
     EP006,
+    EP007,
+    EP008,
+    EP009,
+    EP010,
+    EP011,
+    EP012,
+
+
+
+
 }
 
 // #[derive(Debug, PartialEq, Clone, Copy)]
@@ -68,8 +78,12 @@ impl DiagnosticCode for ErrorCode {
             Self::EP004 => "Expected a value after assignment in variable declaration",
             Self::EP005 => "Expected a semicolon after variable declaration",
             Self::EP006 => "Expected a either a semi colon or an assignment after name in variable declaration",
-            
-
+            Self::EP007 => "Expected a condition after if keyword",
+            Self::EP008 => "Expected a open curly brace after if keyword",
+            Self::EP009 => "Expected a open curly brace after else keyword",
+            Self::EP010 => "Expected a closing curly brace to close the body",
+            Self::EP011 => "Expected a condition after if keyword",
+            Self::EP012 => "Expected a open curly brace after if keyword",
         }
     }
 }

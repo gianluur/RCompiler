@@ -9,10 +9,17 @@ pub struct StatementSpan {
     pub end: usize,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Spanned<T> {
     pub node: T,
     pub span: StatementSpan,
+}
+
+impl<T: std::fmt::Debug> std::fmt::Debug for Spanned<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Transparently debug the node, skipping the "noise" of the span
+        self.node.fmt(f)
+    }
 }
 
 impl<T> Spanned<T> {
@@ -21,16 +28,9 @@ impl<T> Spanned<T> {
     }
 }
 
-impl<T> std::fmt::Display for Spanned<T>
-where T: std::fmt::Display {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.node)
-    }
-}
-
-// Type aliases now carry the lifetime 'a
-type Expression<'a> = Box<Spanned<RawExpression<'a>>>;
+pub type Expression<'a> = Box<Spanned<RawExpression<'a>>>;
 pub type Statement<'a> = Box<Spanned<RawStatement<'a>>>;
+
 #[derive(Debug, Clone)]
 pub struct Type<'a> {
     pub kind: TokenKind,
@@ -53,21 +53,6 @@ impl<'a> Type<'a> {
     }
 }
 
-impl<'a> std::fmt::Display for Type<'a> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.is_array {
-            write!(f, 
-                "Type {{\n    kind: {:?},\n    is_array: {},\n    array_length: {}\n}}", 
-                self.kind, self.is_array, self.array_length.as_ref().unwrap()
-            )
-        } 
-        else {
-            // Concise single-line output for non-arrays
-            write!(f, "Type {{\n    kind: {}\n}}", self.kind)
-        }
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct Parameter<'a> {
     pub name: &'a str,
@@ -75,9 +60,8 @@ pub struct Parameter<'a> {
 }
 
 #[derive(Debug, Clone)]
-pub struct Block<'a> {
+pub struct Body<'a> {
     pub statements: Vec<Statement<'a>>,
-    pub span: StatementSpan,
 }
 
 #[derive(Debug, Clone)]
@@ -152,12 +136,12 @@ pub enum RawStatement<'a> {
     },
     If {
         condition: Expression<'a>,
-        then_branch: Block<'a>,
-        else_branch: Option<ElseBranch<'a>>,
+        body: Body<'a>,
+        elses: Vec<ElseBranch<'a>>,
     },
     While {
         condition: Expression<'a>,
-        body: Block<'a>,
+        body: Body<'a>,
     },
     Break,
     Continue,
@@ -165,26 +149,10 @@ pub enum RawStatement<'a> {
     Return(Option<Expression<'a>>),
 }
 
-impl<'a> std::fmt::Display for RawStatement<'a> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            RawStatement::Placeholder => write!(f, "Placeholder"),
-            RawStatement::VariableDeclaration { is_const, type_, name, value } => {
-                write!(f, 
-                    "VariableDeclaration {{\n    is_const: {},\n    type: {},\n    identifier: {},\n    value: {:?}\n}}", 
-                    is_const, type_, name, if let Some(value) = value { format!("{}", value) } else { "None".to_string() }
-                )
-            }
-            // Add other variants as you implement them...
-            _ => write!(f, "{:?}", self), // Fallback to Debug for now
-        }
-    }
-}
-
 #[derive(Debug, Clone)]
 pub enum ElseBranch<'a> {
     ElseIf(Statement<'a>),
-    Else(Block<'a>),
+    Else(Body<'a>),
 }
 
 pub trait TokenMatcher {
@@ -204,6 +172,7 @@ where F: Fn(TokenKind) -> bool {
     }
 }
 
+#[derive(Debug)]
 pub struct ParserError {
     pub code: ErrorCode,
     pub span: StatementSpan,
@@ -226,6 +195,11 @@ pub struct Parser<'a> {
     // Tracking current span state
     start: usize,
     end: usize,
+
+    // context related stuff
+    inside_if_statement: bool,
+    inside_elif_statement: bool,
+    inside_while_loop: bool,
 }
 
 impl<'a> Parser<'a> {
@@ -242,6 +216,10 @@ impl<'a> Parser<'a> {
             },
             start: 0,
             end: 0,
+
+            inside_if_statement: false,
+            inside_elif_statement: false,
+            inside_while_loop: false,
         }
     }
 
@@ -259,12 +237,25 @@ impl<'a> Parser<'a> {
         Ok(statements)
     }
 
+    // TODO: I can also add after i've done the major of parsing
+    // in the else branch i can add checks for like else if, or elses 
+    // that aren't followed by the if staements or staements like that
+    // So i can get better errors
     fn get_statement(&mut self) -> Result<Statement<'a>, ParserError> {
         if self.is_variable() {
             self.parse_variable()
         }
+
+        else if self.match_peek(TokenKind::If) {
+            self.parse_if_statement()
+        }
+
+        else if self.match_peek(TokenKind::While) {
+            self.parse_while_statement()
+        }
+
         else {
-            panic!("Not implemented");  
+            panic!("Not implemented {}", self.peeked.kind);  
         }
     }
 
@@ -320,6 +311,96 @@ impl<'a> Parser<'a> {
         Ok(Type::new(kind, is_array, array_length))
     }
 
+    fn parse_if_statement(&mut self) -> Result<Statement<'a>, ParserError> {
+        self.inside_if_statement = true;
+
+        let condition: Expression<'a>;
+        let body: Body<'a>;
+        let mut elses: Vec<ElseBranch> = Vec::new();
+
+        self.next(); // Consumes the 'if' keyword or 'elif' keyword
+
+        self.expect(RawExpression::is_start, ErrorCode::EP007)?;
+        condition = self.parse_expression()?;
+        
+        self.expect(TokenKind::LeftBrace, ErrorCode::EP008)?;
+        body = self.parse_body()?;
+
+        if !self.inside_elif_statement {
+            while let Some(_) = self.peek() {
+                if self.peeked.kind == TokenKind::ElseIf {
+                    self.inside_elif_statement = true;
+                    elses.push(ElseBranch::ElseIf(self.parse_if_statement()?));
+                    self.inside_elif_statement = false;
+                }
+                else if self.peeked.kind == TokenKind::Else {
+                    self.next(); // Parses the 'else' keyword
+                    self.expect(TokenKind::LeftBrace, ErrorCode::EP009)?;
+
+                    elses.push(ElseBranch::Else(self.parse_body()?));
+                }
+                else {
+                    break;
+                }
+            }
+            self.inside_if_statement = false;
+        }
+
+        Ok(self.statement(RawStatement::If { condition, body, elses }))
+
+    }
+
+    fn parse_body(&mut self) -> Result<Body<'a>, ParserError> {
+        // Note:
+        // The '{' should always be consumed in the caller,
+        // this is done for style and readiblity purposes
+
+        let mut statements: Vec<Statement<'a>> = Vec::new();
+
+        while let Some(_) = self.peek() {
+            if self.peeked.kind == TokenKind::Eof {
+                return Err(self.error(ErrorCode::EP010));
+            }
+
+            if self.peeked.kind == TokenKind::RightBrace {
+                self.next();
+                // Note:
+                // There's no point in updating the is_match variable
+                // Becuase it will never be used again.
+                // The check is performed inside the if statement that
+                // stops the code execution of this function so there's no
+                // risk of accidental use
+                break;
+            }
+
+            statements.push(self.get_statement()?);
+        }
+
+
+        Ok(Body {
+            statements,
+        })
+    }
+
+    fn parse_while_statement(&mut self) -> Result<Statement<'a>, ParserError> {
+        self.inside_while_loop = true;
+
+        let condition: Expression<'a>;
+        let body: Body<'a>;
+
+        self.next(); // Consumes the 'while' keyword
+
+        self.expect(RawExpression::is_start, ErrorCode::EP011)?;
+        condition = self.parse_expression()?;
+        
+        self.expect(TokenKind::LeftBrace, ErrorCode::EP012)?;
+        body = self.parse_body()?;
+
+        self.inside_while_loop = false;
+
+        Ok(self.statement(RawStatement::While { condition, body }))
+    }
+
     // Note:
     // I will create expression later on because they are the hardest part,
     // Doing it later allows me to get more stuff done quicker
@@ -362,7 +443,7 @@ impl<'a> Parser<'a> {
     fn next(&mut self) -> Token<'a> {
         match self.tokens.next() {
             Some(token) => {
-                self.end += 1;
+                self.end += token.span.literal.len();
                 token
             }
             None => {
