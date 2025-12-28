@@ -43,9 +43,8 @@ pub enum ErrorCode {
     EP018,
     EP019,
     EP020,
-
-
-    
+    EP021,
+    EP022,
 }
 
 // #[derive(Debug, PartialEq, Clone, Copy)]
@@ -99,7 +98,8 @@ impl DiagnosticCode for ErrorCode {
             Self::EP018 => "Expected an expression after assignment operator",
             Self::EP019 => "Expected a semicolon after assignment operator",
             Self::EP020 => "Expected a semicolon after loop control keyword",
-
+            Self::EP021 => "Expected an expression or a semicolon after return keyword",
+            Self::EP022 => "Expected a semicolon after return statement",
             
         }
     }

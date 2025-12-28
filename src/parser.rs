@@ -263,6 +263,10 @@ impl<'a> Parser<'a> {
             self.parse_loop_control()
         }
 
+        else if self.match_peek(TokenKind::Return) {
+            self.parse_return_statement()
+        }
+
         else {
             panic!("Not implemented {}", self.peeked.kind);  
         }
@@ -499,6 +503,26 @@ impl<'a> Parser<'a> {
         self.expect(TokenKind::Semicolon, ErrorCode::EP020)?;
 
         Ok(self.statement(RawStatement::LoopControl(keyword.span.literal)))
+    }
+
+    fn parse_return_statement(&mut self) -> Result<Statement<'a>, ParserError> {
+        self.next(); // Parses the 'return' keyword
+        
+        let mut expression: Option<Expression<'a>> = None;
+        if self.match_peek(TokenKind::Semicolon) {
+            self.next();
+        }
+        else if self.match_peek(RawExpression::is_start) {
+            self.next();
+            expression = Some(self.parse_expression()?);
+        }
+        else {
+            return Err(self.error(ErrorCode::EP021));
+        }
+
+        self.expect(TokenKind::Semicolon, ErrorCode::EP022)?;
+
+        Ok(self.statement(RawStatement::Return(expression)))
     }
 
     // Note:
