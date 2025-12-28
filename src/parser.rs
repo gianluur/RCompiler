@@ -124,7 +124,6 @@ impl<'a>  std::fmt::Display for RawExpression<'a>  {
 
 #[derive(Debug, Clone)]
 pub enum RawStatement<'a> {
-    Placeholder,
     VariableDeclaration {
         is_const: bool,
         type_: Type<'a>,
@@ -515,12 +514,11 @@ impl<'a> Parser<'a> {
         else if self.match_peek(RawExpression::is_start) {
             self.next();
             expression = Some(self.parse_expression()?);
+            self.expect(TokenKind::Semicolon, ErrorCode::EP022)?;
         }
         else {
             return Err(self.error(ErrorCode::EP021));
         }
-
-        self.expect(TokenKind::Semicolon, ErrorCode::EP022)?;
 
         Ok(self.statement(RawStatement::Return(expression)))
     }
