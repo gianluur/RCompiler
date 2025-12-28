@@ -35,9 +35,11 @@ pub enum ErrorCode {
     EP010,
     EP011,
     EP012,
-
-
-
+    EP013,
+    EP014,
+    EP015,
+    EP016,
+    EP017,
 
 }
 
@@ -84,6 +86,12 @@ impl DiagnosticCode for ErrorCode {
             Self::EP010 => "Expected a closing curly brace to close the body",
             Self::EP011 => "Expected a condition after if keyword",
             Self::EP012 => "Expected a open curly brace after if keyword",
+            Self::EP013 => "Expected either arguments or an assignment after identifier",
+            Self::EP014 => "Expected a closing parenthesis for function call",
+            Self::EP015 => "Expected only expression as arguments for function call",
+            Self::EP016 => "Expected a closing parenthesis after comma or another argument",
+            Self::EP017 => "Expected a semicolon after"
+            
         }
     }
 }

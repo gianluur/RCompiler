@@ -2,6 +2,8 @@ use crate::tokenizer::{Token, TokenKind, TokenSpan};
 use crate::error::*;
 
 use core::panic;
+use std::process::id;
+use std::string::ParseError;
 
 #[derive(Debug, Clone, Copy)]
 pub struct StatementSpan {
@@ -79,7 +81,7 @@ pub enum RawExpression<'a> {
     },
     Unary {
         operator: TokenKind,
-        operand: Expression<'a>,
+        operand: Expression<'a>, 
     },
     FunctionCall {
         name: &'a str,
@@ -246,6 +248,10 @@ impl<'a> Parser<'a> {
             self.parse_variable()
         }
 
+        else if self.match_peek(TokenKind::Identifier) {
+            self.parse_identifier()
+        }
+
         else if self.match_peek(TokenKind::If) {
             self.parse_if_statement()
         }
@@ -376,7 +382,6 @@ impl<'a> Parser<'a> {
             statements.push(self.get_statement()?);
         }
 
-
         Ok(Body {
             statements,
         })
@@ -399,6 +404,75 @@ impl<'a> Parser<'a> {
         self.inside_while_loop = false;
 
         Ok(self.statement(RawStatement::While { condition, body }))
+    }
+
+    fn parse_identifier(&mut self) -> Result<Statement<'a>, ParserError> {
+        let identifier: Token<'a> = self.next();
+
+        if self.match_peek(TokenKind::LeftParen){
+            self.parse_function_call(identifier)
+        }
+        else if self.match_peek(Parser::is_assignment()) {
+            self.parse_variable_assignment(identifier)
+        }
+        else {
+            Err(self.error(ErrorCode::EP013))
+        }
+    }
+
+    fn parse_function_call(&mut self, name: Token<'a>) -> Result<Statement<'a>, ParserError> {
+        self.next(); // consumes the '('
+
+        let mut arguments: Vec<Expression> = Vec::new();
+        while let Some(_) = self.peek() {
+            if self.peeked.kind == TokenKind::Eof {
+                return Err(self.error(ErrorCode::EP014));
+            }
+
+            if self.peeked.kind == TokenKind::RightParen {
+                self.next();
+                break;
+            }
+
+            self.expect(RawExpression::is_start, ErrorCode::EP015)?;
+            arguments.push(self.parse_expression()?);
+
+            if self.match_peek(TokenKind::Comma){
+                self.next();
+                if self.match_peek(TokenKind::RightParen) {
+                    return Err(self.error(ErrorCode::EP016));
+                }
+            }            
+        }
+
+        self.expect(TokenKind::Semicolon, ErrorCode::EP017)?;
+
+        // I have to do this for the borrow checker, i didn't really understand why
+        // I can't put it all in one statement
+        let fncall: Expression = self.expression(RawExpression::FunctionCall { 
+            name: name.span.literal,
+            arguments 
+        });
+
+        Ok(self.statement(RawStatement::FunctionCall(
+            fncall
+        )))
+
+    }
+
+    fn parse_variable_assignment(&mut self, name: Token<'a>) -> Result<Statement<'a>, ParserError> {
+        todo!();
+    }
+
+    fn is_assignment() -> impl Fn(TokenKind) -> bool {
+        |kind: TokenKind| matches!(kind, 
+            TokenKind::Assignment | 
+            TokenKind::AddAssignment | TokenKind::SubtractAssignment |
+            TokenKind::MultiplyAssignment | TokenKind::DivideAssignment | 
+            TokenKind::ModulusAssignment | TokenKind::BitwiseAndAssignment |
+            TokenKind::BitwiseOrAssignment | TokenKind::BitwiseXorAssignment |
+            TokenKind::BitwiseRShiftAssignment | TokenKind::BitwiseLShiftAssignment
+        )
     }
 
     // Note:
