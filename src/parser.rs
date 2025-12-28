@@ -461,7 +461,18 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_variable_assignment(&mut self, name: Token<'a>) -> Result<Statement<'a>, ParserError> {
-        todo!();
+        let operator: TokenKind = self.next().kind;
+        
+        self.expect(RawExpression::is_start, ErrorCode::EP018)?;
+        let value: Expression<'a> = self.parse_expression()?;
+        
+        self.expect(TokenKind::Semicolon, ErrorCode::EP019)?;
+        
+        Ok(self.statement(RawStatement::VariableAssignment {
+            name: name.span.literal, 
+            operator, 
+            value 
+        }))
     }
 
     fn is_assignment() -> impl Fn(TokenKind) -> bool {

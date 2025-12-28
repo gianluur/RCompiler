@@ -40,6 +40,8 @@ pub enum ErrorCode {
     EP015,
     EP016,
     EP017,
+    EP018,
+    EP019,
 
 }
 
@@ -90,7 +92,9 @@ impl DiagnosticCode for ErrorCode {
             Self::EP014 => "Expected a closing parenthesis for function call",
             Self::EP015 => "Expected only expression as arguments for function call",
             Self::EP016 => "Expected a closing parenthesis after comma or another argument",
-            Self::EP017 => "Expected a semicolon after"
+            Self::EP017 => "Expected a semicolon after",
+            Self::EP018 => "Expected an expression after assignment operator",
+            Self::EP019 => "Expected a semicolon after assignment operator",
             
         }
     }
