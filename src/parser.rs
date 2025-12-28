@@ -145,8 +145,7 @@ pub enum RawStatement<'a> {
         condition: Expression<'a>,
         body: Body<'a>,
     },
-    Break,
-    Continue,
+    LoopControl(&'a str),
     FunctionCall(Expression<'a>),
     Return(Option<Expression<'a>>),
 }
@@ -258,6 +257,10 @@ impl<'a> Parser<'a> {
 
         else if self.match_peek(TokenKind::While) {
             self.parse_while_statement()
+        }
+
+        else if self.is_loop_control() {
+            self.parse_loop_control()
         }
 
         else {
@@ -484,6 +487,18 @@ impl<'a> Parser<'a> {
             TokenKind::BitwiseOrAssignment | TokenKind::BitwiseXorAssignment |
             TokenKind::BitwiseRShiftAssignment | TokenKind::BitwiseLShiftAssignment
         )
+    }
+
+    fn is_loop_control(&mut self) -> bool {
+        return self.match_peek(TokenKind::Break) ||
+               self.match_peek(TokenKind::Continue);
+    }
+
+    fn parse_loop_control(&mut self) -> Result<Statement<'a>, ParserError> {
+        let keyword: Token<'a> = self.next(); // Parses either 'break' or 'continue'
+        self.expect(TokenKind::Semicolon, ErrorCode::EP020)?;
+
+        Ok(self.statement(RawStatement::LoopControl(keyword.span.literal)))
     }
 
     // Note:

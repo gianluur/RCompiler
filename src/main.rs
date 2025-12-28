@@ -55,7 +55,7 @@ fn main() {
     match MyParser::new(tokens).parse() {
         Ok(statements) => {
             for statement in &statements { 
-                print!("{:#?}", statement) 
+                println!("{:#?}", statement) 
             }
             println!();
             statements
