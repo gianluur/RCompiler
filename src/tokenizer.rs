@@ -64,6 +64,7 @@ pub enum TokenKind {
     Boolean,
     Character,
     String,
+    Null,
     If,
     ElseIf,
     Else,
@@ -138,6 +139,7 @@ impl fmt::Display for TokenKind {
             Self::Boolean => write!(f, "bool"),
             Self::Character => write!(f, "char"),
             Self::String => write!(f, "str"),
+            Self::Null => write!(f, "null"),
             Self::If => write!(f, "if"),
             Self::ElseIf => write!(f, "elif"),
             Self::Else => write!(f, "else"),
@@ -264,6 +266,7 @@ impl<'a> Tokenizer<'a> {
         keywords.insert("char", TokenKind::Character);
         keywords.insert("str", TokenKind::String);
         keywords.insert("bool", TokenKind::Boolean);
+        keywords.insert("null", TokenKind::Null);
 
         Self { 
             source: input,

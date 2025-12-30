@@ -2,8 +2,6 @@ use crate::tokenizer::{Token, TokenKind, TokenSpan};
 use crate::error::*;
 
 use core::panic;
-use std::process::id;
-use std::string::ParseError;
 
 #[derive(Debug, Clone, Copy)]
 pub struct StatementSpan {
@@ -19,7 +17,6 @@ pub struct Spanned<T> {
 
 impl<T: std::fmt::Debug> std::fmt::Debug for Spanned<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // Transparently debug the node, skipping the "noise" of the span
         self.node.fmt(f)
     }
 }
@@ -58,7 +55,7 @@ impl<'a> Type<'a> {
 #[derive(Debug, Clone)]
 pub struct Parameter<'a> {
     pub name: &'a str,
-    pub ty: Type<'a>,
+    pub type_: Type<'a>,
 }
 
 #[derive(Debug, Clone)]
@@ -143,6 +140,12 @@ pub enum RawStatement<'a> {
     While {
         condition: Expression<'a>,
         body: Body<'a>,
+    },
+    Function {
+      name: &'a str,
+      parameters: Vec<Parameter<'a>>,
+      type_: TokenKind,
+      body: Body<'a>
     },
     LoopControl(&'a str),
     FunctionCall(Expression<'a>),
@@ -262,6 +265,10 @@ impl<'a> Parser<'a> {
             self.parse_loop_control()
         }
 
+        else if self.match_peek(TokenKind::Function) {
+            self.parse_function()
+        }
+
         else if self.match_peek(TokenKind::Return) {
             self.parse_return_statement()
         }
@@ -275,33 +282,20 @@ impl<'a> Parser<'a> {
         self.match_peek(Type::is) || self.match_peek(TokenKind::Const)
     }
 
-    fn parse_variable(&mut self) -> Result<Statement<'a>, ParserError> {
-        let mut is_const: bool = false;
-        if self.peeked.kind == TokenKind::Const {
-            self.next();
-            is_const = true;
-        }
+    fn is_assignment() -> impl Fn(TokenKind) -> bool {
+        |kind: TokenKind| matches!(kind, 
+            TokenKind::Assignment | 
+            TokenKind::AddAssignment | TokenKind::SubtractAssignment |
+            TokenKind::MultiplyAssignment | TokenKind::DivideAssignment | 
+            TokenKind::ModulusAssignment | TokenKind::BitwiseAndAssignment |
+            TokenKind::BitwiseOrAssignment | TokenKind::BitwiseXorAssignment |
+            TokenKind::BitwiseRShiftAssignment | TokenKind::BitwiseLShiftAssignment
+        )
+    }
 
-        let type_: Type = self.parse_type()?;
-        let name: &str = self.expect(TokenKind::Identifier, ErrorCode::EP003)?.span.literal;
-        let mut value: Option<Expression<'a>> = None;
-
-        if self.match_peek(TokenKind::Semicolon) {
-            self.next();
-            Ok(self.statement(RawStatement::VariableDeclaration { is_const, type_, name, value}))
-        }
-        else if self.match_peek(TokenKind::Assignment)  {
-            self.next();
-
-            self.expect(RawExpression::is_start, ErrorCode::EP004)?;
-            value = Some(self.parse_expression()?);
-
-            self.expect(TokenKind::Semicolon, ErrorCode::EP005)?;
-            Ok(self.statement(RawStatement::VariableDeclaration { is_const, type_, name, value}))
-        }
-        else {
-            Err(self.error(ErrorCode::EP006))
-        }
+    fn is_loop_control(&mut self) -> bool {
+        return self.match_peek(TokenKind::Break) ||
+               self.match_peek(TokenKind::Continue);
     }
 
     fn parse_type(&mut self) -> Result<Type<'a>, ParserError> {
@@ -310,17 +304,49 @@ impl<'a> Parser<'a> {
         let mut is_array: bool = false;
 
         // Check for a left bracket '['
-        if self.match_next(TokenKind::LeftBracket) {
+        if self.match_peek(TokenKind::LeftBracket) {
+            self.next();
+
             // Check if next character is the start of an expression
-            self.expect(RawExpression::is_start, ErrorCode::EP001)?;
+            self.expect_peek(RawExpression::is_start, ErrorCode::EP001)?;
             array_length = Some(self.parse_expression()?);
             
             // Chech for a right bracket ']'
-            self.expect(TokenKind::RightBracket, ErrorCode::EP002)?;
+            self.expect_next(TokenKind::RightBracket, ErrorCode::EP002)?;
             is_array = true;
         }
 
         Ok(Type::new(kind, is_array, array_length))
+    }
+
+    fn parse_variable(&mut self) -> Result<Statement<'a>, ParserError> {
+        let mut is_const: bool = false;
+        if self.peeked.kind == TokenKind::Const {
+            self.next();
+            is_const = true;
+        }
+
+        let type_: Type = self.parse_type()?;
+        let name: &str = self.expect_next(TokenKind::Identifier, ErrorCode::EP003)?.span.literal;
+        let mut value: Option<Expression<'a>> = None;
+
+        if self.match_peek(TokenKind::Semicolon) {
+            self.next();
+
+            Ok(self.statement(RawStatement::VariableDeclaration { is_const, type_, name, value}))
+        }
+        else if self.match_peek(TokenKind::Assignment)  {
+            self.next();
+
+            self.expect_peek(RawExpression::is_start, ErrorCode::EP004)?;
+            value = Some(self.parse_expression()?);
+
+            self.expect_next(TokenKind::Semicolon, ErrorCode::EP005)?;
+            Ok(self.statement(RawStatement::VariableDeclaration { is_const, type_, name, value}))
+        }
+        else {
+            Err(self.error(ErrorCode::EP006))
+        }
     }
 
     fn parse_if_statement(&mut self) -> Result<Statement<'a>, ParserError> {
@@ -332,10 +358,10 @@ impl<'a> Parser<'a> {
 
         self.next(); // Consumes the 'if' keyword or 'elif' keyword
 
-        self.expect(RawExpression::is_start, ErrorCode::EP007)?;
+        self.expect_peek(RawExpression::is_start, ErrorCode::EP007)?;
         condition = self.parse_expression()?;
         
-        self.expect(TokenKind::LeftBrace, ErrorCode::EP008)?;
+        self.expect_peek(TokenKind::LeftBrace, ErrorCode::EP008)?;
         body = self.parse_body()?;
 
         if !self.inside_elif_statement {
@@ -347,7 +373,7 @@ impl<'a> Parser<'a> {
                 }
                 else if self.peeked.kind == TokenKind::Else {
                     self.next(); // Parses the 'else' keyword
-                    self.expect(TokenKind::LeftBrace, ErrorCode::EP009)?;
+                    self.expect_peek(TokenKind::LeftBrace, ErrorCode::EP009)?;
 
                     elses.push(ElseBranch::Else(self.parse_body()?));
                 }
@@ -363,9 +389,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_body(&mut self) -> Result<Body<'a>, ParserError> {
-        // Note:
-        // The '{' should always be consumed in the caller,
-        // this is done for style and readiblity purposes
+        self.next(); // Consumes '{'
 
         let mut statements: Vec<Statement<'a>> = Vec::new();
 
@@ -375,7 +399,7 @@ impl<'a> Parser<'a> {
             }
 
             if self.peeked.kind == TokenKind::RightBrace {
-                self.next();
+                self.next(); // Consumes the '}'
                 // Note:
                 // There's no point in updating the is_match variable
                 // Becuase it will never be used again.
@@ -395,16 +419,15 @@ impl<'a> Parser<'a> {
 
     fn parse_while_statement(&mut self) -> Result<Statement<'a>, ParserError> {
         self.inside_while_loop = true;
+        self.next(); // Consumes the 'while' keyword
 
         let condition: Expression<'a>;
         let body: Body<'a>;
 
-        self.next(); // Consumes the 'while' keyword
-
-        self.expect(RawExpression::is_start, ErrorCode::EP011)?;
+        self.expect_peek(RawExpression::is_start, ErrorCode::EP011)?;
         condition = self.parse_expression()?;
         
-        self.expect(TokenKind::LeftBrace, ErrorCode::EP012)?;
+        self.expect_peek(TokenKind::LeftBrace, ErrorCode::EP012)?;
         body = self.parse_body()?;
 
         self.inside_while_loop = false;
@@ -429,29 +452,9 @@ impl<'a> Parser<'a> {
     fn parse_function_call(&mut self, name: Token<'a>) -> Result<Statement<'a>, ParserError> {
         self.next(); // consumes the '('
 
-        let mut arguments: Vec<Expression> = Vec::new();
-        while let Some(_) = self.peek() {
-            if self.peeked.kind == TokenKind::Eof {
-                return Err(self.error(ErrorCode::EP014));
-            }
+        let arguments: Vec<Expression> = self.parse_arguments()?;
 
-            if self.peeked.kind == TokenKind::RightParen {
-                self.next();
-                break;
-            }
-
-            self.expect(RawExpression::is_start, ErrorCode::EP015)?;
-            arguments.push(self.parse_expression()?);
-
-            if self.match_peek(TokenKind::Comma){
-                self.next();
-                if self.match_peek(TokenKind::RightParen) {
-                    return Err(self.error(ErrorCode::EP016));
-                }
-            }            
-        }
-
-        self.expect(TokenKind::Semicolon, ErrorCode::EP017)?;
+        self.expect_next(TokenKind::Semicolon, ErrorCode::EP017)?;
 
         // I have to do this for the borrow checker, i didn't really understand why
         // I can't put it all in one statement
@@ -466,13 +469,39 @@ impl<'a> Parser<'a> {
 
     }
 
+    fn parse_arguments(&mut self) -> Result<Vec<Expression<'a>>, ParserError> {
+        let mut arguments: Vec<Expression> = Vec::new();
+        while let Some(_) = self.peek() {
+            if self.peeked.kind == TokenKind::Eof {
+                return Err(self.error(ErrorCode::EP014));
+            }
+
+            if self.peeked.kind == TokenKind::RightParen {
+                self.next();
+                break;
+            }
+
+            self.expect_peek(RawExpression::is_start, ErrorCode::EP015)?;
+            arguments.push(self.parse_expression()?);
+
+            if self.match_peek(TokenKind::Comma){
+                self.next();
+                if self.match_peek(TokenKind::RightParen) {
+                    return Err(self.error(ErrorCode::EP016));
+                }
+            }            
+        }
+
+        Ok(arguments)
+    }
+
     fn parse_variable_assignment(&mut self, name: Token<'a>) -> Result<Statement<'a>, ParserError> {
         let operator: TokenKind = self.next().kind;
         
-        self.expect(RawExpression::is_start, ErrorCode::EP018)?;
+        self.expect_peek(RawExpression::is_start, ErrorCode::EP018)?;
         let value: Expression<'a> = self.parse_expression()?;
         
-        self.expect(TokenKind::Semicolon, ErrorCode::EP019)?;
+        self.expect_next(TokenKind::Semicolon, ErrorCode::EP019)?;
         
         Ok(self.statement(RawStatement::VariableAssignment {
             name: name.span.literal, 
@@ -481,25 +510,9 @@ impl<'a> Parser<'a> {
         }))
     }
 
-    fn is_assignment() -> impl Fn(TokenKind) -> bool {
-        |kind: TokenKind| matches!(kind, 
-            TokenKind::Assignment | 
-            TokenKind::AddAssignment | TokenKind::SubtractAssignment |
-            TokenKind::MultiplyAssignment | TokenKind::DivideAssignment | 
-            TokenKind::ModulusAssignment | TokenKind::BitwiseAndAssignment |
-            TokenKind::BitwiseOrAssignment | TokenKind::BitwiseXorAssignment |
-            TokenKind::BitwiseRShiftAssignment | TokenKind::BitwiseLShiftAssignment
-        )
-    }
-
-    fn is_loop_control(&mut self) -> bool {
-        return self.match_peek(TokenKind::Break) ||
-               self.match_peek(TokenKind::Continue);
-    }
-
     fn parse_loop_control(&mut self) -> Result<Statement<'a>, ParserError> {
         let keyword: Token<'a> = self.next(); // Parses either 'break' or 'continue'
-        self.expect(TokenKind::Semicolon, ErrorCode::EP020)?;
+        self.expect_next(TokenKind::Semicolon, ErrorCode::EP020)?;
 
         Ok(self.statement(RawStatement::LoopControl(keyword.span.literal)))
     }
@@ -512,9 +525,8 @@ impl<'a> Parser<'a> {
             self.next();
         }
         else if self.match_peek(RawExpression::is_start) {
-            self.next();
             expression = Some(self.parse_expression()?);
-            self.expect(TokenKind::Semicolon, ErrorCode::EP022)?;
+            self.expect_next(TokenKind::Semicolon, ErrorCode::EP022)?;
         }
         else {
             return Err(self.error(ErrorCode::EP021));
@@ -523,13 +535,69 @@ impl<'a> Parser<'a> {
         Ok(self.statement(RawStatement::Return(expression)))
     }
 
-    // Note:
-    // I will create expression later on because they are the hardest part,
-    // Doing it later allows me to get more stuff done quicker
-    fn parse_expression(&mut self) -> Result<Expression<'a>, ParserError> {
-        Ok(self.expression(RawExpression::Placeholder))
+    fn parse_function(&mut self) -> Result<Statement<'a>, ParserError> {
+        self.next(); // Consumes the 'fn' keyword
+        
+        let name: &'a str = self.expect_next(TokenKind::Identifier, 
+                    ErrorCode::EP023)?.span.literal;
+        
+        self.expect_next(TokenKind::LeftParen, ErrorCode::EP024)?;
+        let parameters: Vec<Parameter> = self.parse_parameters()?;
+        
+        let mut type_: TokenKind = TokenKind::Null;
+        if self.match_peek(Type::is) {
+            type_ = self.parse_type()?.kind;
+        }
+
+        self.expect_peek(TokenKind::LeftBrace, ErrorCode::EP025)?;
+        let body: Body<'a> = self.parse_body()?;
+        
+        Ok(self.statement(RawStatement::Function { 
+            name, 
+            parameters, 
+            type_, 
+            body 
+        }))
     }
 
+    fn parse_parameters(&mut self) -> Result<Vec<Parameter<'a>>, ParserError> {
+        let mut parameters: Vec<Parameter> = Vec::new();
+        while let Some(_) = self.peek() {
+            if self.peeked.kind == TokenKind::Eof {
+                return Err(self.error(ErrorCode::EP026));
+            }
+
+            if self.peeked.kind == TokenKind::RightParen {
+                self.next();
+                break;
+            }
+
+            self.expect_peek(Type::is, ErrorCode::EP027)?;
+            let type_: Type<'a> = self.parse_type()?;
+
+            let name: &'a str = self.expect_next(TokenKind::Identifier, 
+                        ErrorCode::EP028)?.span.literal;
+
+            parameters.push(Parameter {
+                name, 
+                type_ 
+            });
+
+            if self.match_peek(TokenKind::Comma){
+                self.next();
+                if !self.match_peek(Type::is) {
+                    return Err(self.error(ErrorCode::EP029));
+                }
+            }            
+        }
+
+        Ok(parameters)
+    }
+
+    fn parse_expression(&mut self) -> Result<Expression<'a>, ParserError> {
+        self.next();
+        Ok(self.expression(RawExpression::Placeholder))
+    }
 
     fn statement(&mut self, node: RawStatement<'a>) -> Statement<'a> {
         Box::new(Spanned { 
@@ -565,6 +633,7 @@ impl<'a> Parser<'a> {
     fn next(&mut self) -> Token<'a> {
         match self.tokens.next() {
             Some(token) => {
+                self.start = self.end;
                 self.end += token.span.literal.len();
                 token
             }
@@ -584,16 +653,6 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn match_next<M: TokenMatcher>(&mut self, matcher: M) -> bool {
-        if let Some(token) = self.peek() {
-            if matcher.matches(token.kind) {
-                self.next();
-                return true;
-            }
-        }
-        return false;
-    }
-
     pub fn match_peek<M: TokenMatcher>(&mut self, matcher: M) -> bool {
         if let Some(token) = self.peek() {
             if matcher.matches(token.kind) {
@@ -603,10 +662,19 @@ impl<'a> Parser<'a> {
         return false;
     }
 
-    fn expect<M: TokenMatcher>(&mut self, matcher: M, error: ErrorCode) -> Result<Token<'a>, ParserError> {
+    fn expect_next<M: TokenMatcher>(&mut self, matcher: M, error: ErrorCode) -> Result<Token<'a>, ParserError> {
         if let Some(token) = self.peek() {
             if matcher.matches(token.kind) {
                 return Ok(self.next());
+            }
+        }
+        Err(self.error(error))
+    }
+
+    fn expect_peek<M: TokenMatcher>(&mut self, matcher: M, error: ErrorCode) -> Result<Token<'a>, ParserError> {
+        if let Some(token) = self.peek() {
+            if matcher.matches(token.kind) {
+                return Ok(token);
             }
         }
         Err(self.error(error))

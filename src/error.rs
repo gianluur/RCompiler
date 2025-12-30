@@ -45,6 +45,14 @@ pub enum ErrorCode {
     EP020,
     EP021,
     EP022,
+    EP023,
+    EP024,
+    EP025,
+    EP026,
+    EP027,
+    EP028,
+    EP029,
+
 }
 
 // #[derive(Debug, PartialEq, Clone, Copy)]
@@ -100,7 +108,13 @@ impl DiagnosticCode for ErrorCode {
             Self::EP020 => "Expected a semicolon after loop control keyword",
             Self::EP021 => "Expected an expression or a semicolon after return keyword",
             Self::EP022 => "Expected a semicolon after return statement",
-            
+            Self::EP023 => "Expected a name after function keyword",
+            Self::EP024 => "Expected a open parenthesis after function name",
+            Self::EP025 => "Expected an opening brace for function body",
+            Self::EP026 => "Expected a closing parenthesis for function parameters",
+            Self::EP027 => "Expected a type for parameter",
+            Self::EP028 => "Expected a name after parameter",
+            Self::EP029 => "Expected another parameter for the funciton"
         }
     }
 }

@@ -24,7 +24,6 @@ Arrays are declared by specifying the base type followed by the size in square b
 ---
 
 ### 2. Variables and Assignment
-
 All variables must be declared with a type or preceding it a const specifier. Statements must end with a semicolon `;`.
 
 ```rust
@@ -40,7 +39,6 @@ is_running = true;
 ```
 
 ### 3. If Statements
-Standard conditional blocks based on a boolean condition.
 ```rust
 if x > 0 {
     y = x;
@@ -48,11 +46,25 @@ if x > 0 {
 ```
 
 ### 4. While Loops
-Repeat code blocks as long as the condition evaluates to true.
 ```rust
 while i < 10 {
     i = i + 1;
 }
+```
+
+### 5. Functions
+```rust
+
+// With return value
+fn func1(i32 x, i32 y) i32 {
+    return x * y;
+}
+
+// Without return value
+fn func2(i32 x, i32 y) {
+    return;
+}
+
 ```
 
 **This is a very limited syntax right now i will add more later on as i need it** 
