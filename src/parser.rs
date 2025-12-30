@@ -27,42 +27,6 @@ impl<T> Spanned<T> {
     }
 }
 
-pub type Expression<'a> = Box<Spanned<RawExpression<'a>>>;
-pub type Statement<'a> = Box<Spanned<RawStatement<'a>>>;
-
-#[derive(Debug, Clone)]
-pub struct Type<'a> {
-    pub kind: TokenKind,
-    pub is_array: bool,
-    pub array_length: Option<Expression<'a>>,
-}
-
-impl<'a> Type<'a> {
-    pub fn new(kind: TokenKind, is_array: bool, array_length: Option<Expression<'a>>) -> Self {
-        Self { kind, is_array, array_length }
-    }
-
-    pub fn is(kind: TokenKind) -> bool {
-        use TokenKind::*;
-        matches!(kind, 
-            SignedInt8 | SignedInt16 | SignedInt32 | SignedInt64 |
-            UnsignedInt8 | UnsignedInt16 | UnsignedInt32 | UnsignedInt64 |
-            Float32 | Float64 | Character | String | Boolean
-        )
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct Parameter<'a> {
-    pub name: &'a str,
-    pub type_: Type<'a>,
-}
-
-#[derive(Debug, Clone)]
-pub struct Body<'a> {
-    pub statements: Vec<Statement<'a>>,
-}
-
 #[derive(Debug, Clone)]
 pub enum RawExpression<'a> {
     Placeholder,
@@ -157,6 +121,42 @@ pub enum ElseBranch<'a> {
     ElseIf(Statement<'a>),
     Else(Body<'a>),
 }
+
+#[derive(Debug, Clone)]
+pub struct Type<'a> {
+    pub kind: TokenKind,
+    pub is_array: bool,
+    pub array_length: Option<Expression<'a>>,
+}
+
+impl<'a> Type<'a> {
+    pub fn new(kind: TokenKind, is_array: bool, array_length: Option<Expression<'a>>) -> Self {
+        Self { kind, is_array, array_length }
+    }
+    
+    pub fn is(kind: TokenKind) -> bool {
+        use TokenKind::*;
+        matches!(kind, 
+            SignedInt8 | SignedInt16 | SignedInt32 | SignedInt64 |
+            UnsignedInt8 | UnsignedInt16 | UnsignedInt32 | UnsignedInt64 |
+            Float32 | Float64 | Character | String | Boolean | Const
+        )
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Parameter<'a> {
+    pub name: &'a str,
+    pub type_: Type<'a>,
+}
+
+#[derive(Debug, Clone)]
+pub struct Body<'a> {
+    pub statements: Vec<Statement<'a>>,
+}
+
+pub type Expression<'a> = Box<Spanned<RawExpression<'a>>>;
+pub type Statement<'a> = Box<Spanned<RawStatement<'a>>>;
 
 pub trait TokenMatcher {
     fn matches(&self, kind: TokenKind) -> bool;
@@ -545,8 +545,16 @@ impl<'a> Parser<'a> {
         let parameters: Vec<Parameter> = self.parse_parameters()?;
         
         let mut type_: TokenKind = TokenKind::Null;
-        if self.match_peek(Type::is) {
+        // if self.match_peek(Type::is) {
+        //     type_ = self.parse_type()?.kind;
+        // }
+
+        if !self.match_peek(TokenKind::LeftBrace) && 
+            self.match_peek(Type::is) {
             type_ = self.parse_type()?.kind;
+        }
+        else {
+            return Err(self.error(ErrorCode::EP025));
         }
 
         self.expect_peek(TokenKind::LeftBrace, ErrorCode::EP025)?;

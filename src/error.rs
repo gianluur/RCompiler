@@ -52,6 +52,7 @@ pub enum ErrorCode {
     EP027,
     EP028,
     EP029,
+    EP030,
 
 }
 
@@ -110,11 +111,12 @@ impl DiagnosticCode for ErrorCode {
             Self::EP022 => "Expected a semicolon after return statement",
             Self::EP023 => "Expected a name after function keyword",
             Self::EP024 => "Expected a open parenthesis after function name",
-            Self::EP025 => "Expected an opening brace for function body",
-            Self::EP026 => "Expected a closing parenthesis for function parameters",
-            Self::EP027 => "Expected a type for parameter",
-            Self::EP028 => "Expected a name after parameter",
-            Self::EP029 => "Expected another parameter for the funciton"
+            Self::EP025 => "Expected a valid type for function return value",
+            Self::EP026 => "Expected an opening brace for function body",
+            Self::EP027 => "Expected a closing parenthesis for function parameters",
+            Self::EP028 => "Expected a type for parameter",
+            Self::EP029 => "Expected a name after parameter",
+            Self::EP030 => "Expected another parameter for the function"
         }
     }
 }
