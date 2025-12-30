@@ -545,10 +545,6 @@ impl<'a> Parser<'a> {
         let parameters: Vec<Parameter> = self.parse_parameters()?;
         
         let mut type_: TokenKind = TokenKind::Null;
-        // if self.match_peek(Type::is) {
-        //     type_ = self.parse_type()?.kind;
-        // }
-
         if !self.match_peek(TokenKind::LeftBrace) && 
             self.match_peek(Type::is) {
             type_ = self.parse_type()?.kind;
@@ -557,7 +553,7 @@ impl<'a> Parser<'a> {
             return Err(self.error(ErrorCode::EP025));
         }
 
-        self.expect_peek(TokenKind::LeftBrace, ErrorCode::EP025)?;
+        self.expect_peek(TokenKind::LeftBrace, ErrorCode::EP026)?;
         let body: Body<'a> = self.parse_body()?;
         
         Ok(self.statement(RawStatement::Function { 
@@ -572,7 +568,7 @@ impl<'a> Parser<'a> {
         let mut parameters: Vec<Parameter> = Vec::new();
         while let Some(_) = self.peek() {
             if self.peeked.kind == TokenKind::Eof {
-                return Err(self.error(ErrorCode::EP026));
+                return Err(self.error(ErrorCode::EP027));
             }
 
             if self.peeked.kind == TokenKind::RightParen {
@@ -580,11 +576,11 @@ impl<'a> Parser<'a> {
                 break;
             }
 
-            self.expect_peek(Type::is, ErrorCode::EP027)?;
+            self.expect_peek(Type::is, ErrorCode::EP028)?;
             let type_: Type<'a> = self.parse_type()?;
 
             let name: &'a str = self.expect_next(TokenKind::Identifier, 
-                        ErrorCode::EP028)?.span.literal;
+                        ErrorCode::EP029)?.span.literal;
 
             parameters.push(Parameter {
                 name, 
@@ -594,7 +590,7 @@ impl<'a> Parser<'a> {
             if self.match_peek(TokenKind::Comma){
                 self.next();
                 if !self.match_peek(Type::is) {
-                    return Err(self.error(ErrorCode::EP029));
+                    return Err(self.error(ErrorCode::EP030));
                 }
             }            
         }
