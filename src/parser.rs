@@ -59,7 +59,7 @@ impl<'a> RawExpression<'a> {
         use TokenKind::*;
         matches!(kind,
             IntegerLiteral | FloatLiteral | CharLiteral | StringLiteral |
-            LeftParen | RightParen | True | False | Identifier | Minus
+            LeftParen | RightParen | True | False | Identifier | Minus | Not
         )
     }
 
@@ -280,7 +280,7 @@ impl<'a> Parser<'a> {
         }
 
         else {
-            if self.match_peek(TokenKind::Else) ||
+            if self.match_peek(TokenKind::ElseIf) ||
                self.match_peek(TokenKind::Else) {
                 return Err(self.error(ErrorCode::EP000));
             }
@@ -648,7 +648,7 @@ impl<'a> Parser<'a> {
                 self.expect_next(TokenKind::RightParen, ErrorCode::EP031)?;
                 expr
             }
-            
+
             _ => return Err(self.error(ErrorCode::EP032)),
         };
 
