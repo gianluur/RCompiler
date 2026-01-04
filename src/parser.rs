@@ -59,18 +59,20 @@ impl<'a> RawExpression<'a> {
         use TokenKind::*;
         matches!(kind,
             IntegerLiteral | FloatLiteral | CharLiteral | StringLiteral |
-            Plus | Minus | Multiplication | Division | Modulus | 
-            BitwiseAnd | BitwiseOr | BitwiseXor | BitwiseLShift | BitwiseRShift |
-            LeftParen | RightParen | True | False | Identifier
+            LeftParen | RightParen | True | False | Identifier | Minus
         )
     }
-    
-    pub fn is_start(kind: TokenKind) -> bool {
-        use TokenKind::*;
-        matches!(kind,
-            IntegerLiteral | FloatLiteral | CharLiteral | StringLiteral |
-            LeftParen | RightParen | True | False | Identifier
-        )
+
+    pub fn get_binding_power(kind: TokenKind) -> (u8, u8) {
+        match kind {
+            // Low precedence
+            TokenKind::Plus | TokenKind::Minus => (1, 2),
+            // Higher
+            TokenKind::Multiplication | TokenKind::Division | TokenKind::Modulus => (3, 4),
+            // Highest (Function calls and Array access)
+            TokenKind::LeftParen | TokenKind::LeftBracket => (5, 6),
+            _ => (0, 0),
+        }
     }
 }
 
@@ -193,16 +195,19 @@ impl ParserError {
 
 pub struct Parser<'a> {
     tokens: std::iter::Peekable<std::vec::IntoIter<Token<'a>>>,
+
     next: Token<'a>,
     peeked: Token<'a>,
+
     // Tracking current span state
     start: usize,
     end: usize,
 
     // context related stuff
-    inside_if_statement: bool,
-    inside_elif_statement: bool,
-    inside_while_loop: bool,
+    inside_if: bool,
+    inside_elif: bool,
+    inside_while: bool,
+    inside_function: bool
 }
 
 impl<'a> Parser<'a> {
@@ -220,9 +225,10 @@ impl<'a> Parser<'a> {
             start: 0,
             end: 0,
 
-            inside_if_statement: false,
-            inside_elif_statement: false,
-            inside_while_loop: false,
+            inside_if: false,
+            inside_elif: false,
+            inside_while: false,
+            inside_function: false,
         }
     }
 
@@ -274,6 +280,11 @@ impl<'a> Parser<'a> {
         }
 
         else {
+            if self.match_peek(TokenKind::Else) ||
+               self.match_peek(TokenKind::Else) {
+                return Err(self.error(ErrorCode::EP000));
+            }
+
             panic!("Not implemented {}", self.peeked.kind);  
         }
     }
@@ -308,7 +319,7 @@ impl<'a> Parser<'a> {
             self.next();
 
             // Check if next character is the start of an expression
-            self.expect_peek(RawExpression::is_start, ErrorCode::EP001)?;
+            self.expect_peek(RawExpression::is, ErrorCode::EP001)?;
             array_length = Some(self.parse_expression()?);
             
             // Chech for a right bracket ']'
@@ -338,7 +349,7 @@ impl<'a> Parser<'a> {
         else if self.match_peek(TokenKind::Assignment)  {
             self.next();
 
-            self.expect_peek(RawExpression::is_start, ErrorCode::EP004)?;
+            self.expect_peek(RawExpression::is, ErrorCode::EP004)?;
             value = Some(self.parse_expression()?);
 
             self.expect_next(TokenKind::Semicolon, ErrorCode::EP005)?;
@@ -350,7 +361,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_if_statement(&mut self) -> Result<Statement<'a>, ParserError> {
-        self.inside_if_statement = true;
+        self.inside_if = true;
 
         let condition: Expression<'a>;
         let body: Body<'a>;
@@ -358,18 +369,18 @@ impl<'a> Parser<'a> {
 
         self.next(); // Consumes the 'if' keyword or 'elif' keyword
 
-        self.expect_peek(RawExpression::is_start, ErrorCode::EP007)?;
+        self.expect_peek(RawExpression::is, ErrorCode::EP007)?;
         condition = self.parse_expression()?;
         
         self.expect_peek(TokenKind::LeftBrace, ErrorCode::EP008)?;
         body = self.parse_body()?;
 
-        if !self.inside_elif_statement {
+        if !self.inside_elif {
             while let Some(_) = self.peek() {
                 if self.peeked.kind == TokenKind::ElseIf {
-                    self.inside_elif_statement = true;
+                    self.inside_elif = true;
                     elses.push(ElseBranch::ElseIf(self.parse_if_statement()?));
-                    self.inside_elif_statement = false;
+                    self.inside_elif = false;
                 }
                 else if self.peeked.kind == TokenKind::Else {
                     self.next(); // Parses the 'else' keyword
@@ -381,7 +392,7 @@ impl<'a> Parser<'a> {
                     break;
                 }
             }
-            self.inside_if_statement = false;
+            self.inside_if = false;
         }
 
         Ok(self.statement(RawStatement::If { condition, body, elses }))
@@ -418,19 +429,19 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_while_statement(&mut self) -> Result<Statement<'a>, ParserError> {
-        self.inside_while_loop = true;
+        self.inside_while = true;
         self.next(); // Consumes the 'while' keyword
 
         let condition: Expression<'a>;
         let body: Body<'a>;
 
-        self.expect_peek(RawExpression::is_start, ErrorCode::EP011)?;
+        self.expect_peek(RawExpression::is, ErrorCode::EP011)?;
         condition = self.parse_expression()?;
         
         self.expect_peek(TokenKind::LeftBrace, ErrorCode::EP012)?;
         body = self.parse_body()?;
 
-        self.inside_while_loop = false;
+        self.inside_while = false;
 
         Ok(self.statement(RawStatement::While { condition, body }))
     }
@@ -438,11 +449,11 @@ impl<'a> Parser<'a> {
     fn parse_identifier(&mut self) -> Result<Statement<'a>, ParserError> {
         let identifier: Token<'a> = self.next();
 
-        if self.match_peek(TokenKind::LeftParen){
-            self.parse_function_call(identifier)
-        }
-        else if self.match_peek(Parser::is_assignment()) {
+        if self.match_peek(Parser::is_assignment()) {
             self.parse_variable_assignment(identifier)
+        }
+        else if self.match_peek(TokenKind::LeftParen){
+            self.parse_function_call(identifier)
         }
         else {
             Err(self.error(ErrorCode::EP013))
@@ -466,7 +477,6 @@ impl<'a> Parser<'a> {
         Ok(self.statement(RawStatement::FunctionCall(
             fncall
         )))
-
     }
 
     fn parse_arguments(&mut self) -> Result<Vec<Expression<'a>>, ParserError> {
@@ -481,7 +491,7 @@ impl<'a> Parser<'a> {
                 break;
             }
 
-            self.expect_peek(RawExpression::is_start, ErrorCode::EP015)?;
+            self.expect_peek(RawExpression::is, ErrorCode::EP015)?;
             arguments.push(self.parse_expression()?);
 
             if self.match_peek(TokenKind::Comma){
@@ -498,7 +508,7 @@ impl<'a> Parser<'a> {
     fn parse_variable_assignment(&mut self, name: Token<'a>) -> Result<Statement<'a>, ParserError> {
         let operator: TokenKind = self.next().kind;
         
-        self.expect_peek(RawExpression::is_start, ErrorCode::EP018)?;
+        self.expect_peek(RawExpression::is, ErrorCode::EP018)?;
         let value: Expression<'a> = self.parse_expression()?;
         
         self.expect_next(TokenKind::Semicolon, ErrorCode::EP019)?;
@@ -524,7 +534,7 @@ impl<'a> Parser<'a> {
         if self.match_peek(TokenKind::Semicolon) {
             self.next();
         }
-        else if self.match_peek(RawExpression::is_start) {
+        else if self.match_peek(RawExpression::is) {
             expression = Some(self.parse_expression()?);
             self.expect_next(TokenKind::Semicolon, ErrorCode::EP022)?;
         }
@@ -536,6 +546,8 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_function(&mut self) -> Result<Statement<'a>, ParserError> {
+        self.inside_function = true;
+
         self.next(); // Consumes the 'fn' keyword
         
         let name: &'a str = self.expect_next(TokenKind::Identifier, 
@@ -545,17 +557,19 @@ impl<'a> Parser<'a> {
         let parameters: Vec<Parameter> = self.parse_parameters()?;
         
         let mut type_: TokenKind = TokenKind::Null;
-        if !self.match_peek(TokenKind::LeftBrace) && 
-            self.match_peek(Type::is) {
-            type_ = self.parse_type()?.kind;
-        }
-        else {
-            return Err(self.error(ErrorCode::EP025));
+        if !self.match_peek(TokenKind::LeftBrace){
+            if self.match_peek(Type::is) {
+                type_ = self.parse_type()?.kind;
+            }
+            else {
+                return Err(self.error(ErrorCode::EP025));
+            }
         }
 
         self.expect_peek(TokenKind::LeftBrace, ErrorCode::EP026)?;
         let body: Body<'a> = self.parse_body()?;
-        
+
+        self.inside_function = false;
         Ok(self.statement(RawStatement::Function { 
             name, 
             parameters, 
@@ -599,8 +613,102 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_expression(&mut self) -> Result<Expression<'a>, ParserError> {
-        self.next();
-        Ok(self.expression(RawExpression::Placeholder))
+        Ok(self.parse_expr_with_bp(0))?
+        // self.next();
+        // Ok(self.expression(RawExpression::Placeholder))
+    }
+
+    fn parse_expr_with_bp(&mut self, min_bp: u8) -> Result<Expression<'a>, ParserError> {
+        let token: Token<'a> = self.next(); // Consume the first token
+
+        // This is the first part of the expression 
+        let mut left: Expression = match token.kind {
+            TokenKind::IntegerLiteral | TokenKind::FloatLiteral | 
+            TokenKind::CharLiteral    | TokenKind::StringLiteral |
+            TokenKind::True | TokenKind::False => {
+                self.expression(RawExpression::Literal { 
+                    kind: token.kind, 
+                    value: token.span.literal 
+                })
+            },
+            TokenKind::Identifier => {
+                self.expression(RawExpression::Variable(token.span.literal))
+            },
+            TokenKind::Minus | TokenKind::Not => {
+                // Unary Op: recursive call with high binding power
+                let operand: Expression = self.parse_expr_with_bp(4)?; 
+                self.expression(RawExpression::Unary { 
+                    operator: token.kind, 
+                    operand 
+                })
+            },
+            TokenKind::LeftParen => {
+                // Grouping: reset BP to 0 to parse inside the parens
+                let expr = self.parse_expr_with_bp(0)?;
+                self.expect_next(TokenKind::RightParen, ErrorCode::EP031)?;
+                expr
+            }
+            
+            _ => return Err(self.error(ErrorCode::EP032)),
+        };
+
+        // This is the operator and the right part of the expression
+        loop {
+            let operator = match self.peek() {
+                    Some(t) if t.kind != TokenKind::Eof => t,
+                    _ => break,
+                };
+
+                let (l_bp, r_bp) = RawExpression::get_binding_power(operator.kind);
+                
+                // If it's not an operator (bp 0) or isn't strong enough, stop immediately.
+                if l_bp == 0 || l_bp < min_bp {
+                    break;
+                }
+
+                self.next();
+
+            match operator.kind {
+                // Standard Math
+                TokenKind::Plus | TokenKind::Minus | 
+                TokenKind::Multiplication | TokenKind::Division |
+                TokenKind::Modulus => {
+                    let right = self.parse_expr_with_bp(r_bp)?;
+                    left = self.expression(RawExpression::Binary {
+                        left,
+                        operator: operator.kind,
+                        right,
+                    });
+                }
+
+                // Array Access: name[index]
+                TokenKind::LeftBracket => {
+                    let index = self.parse_expr_with_bp(0)?; // Inner expr
+                    self.expect_next(TokenKind::RightBracket, ErrorCode::EP033)?;
+                    left = self.expression(RawExpression::ArrayAccess {
+                        array: left,
+                        index,
+                    });
+                }
+
+                // Function Call: name(arg1, arg2)
+                TokenKind::LeftParen => {
+                    // Here 'left' is the function name (Expression::Variable)
+                    let name = match left.node {
+                        RawExpression::Variable(n) => n,
+                        _ => return Err(self.error(ErrorCode::EP034)),
+                    };
+                    let arguments: Vec<Expression> = self.parse_arguments()?;
+                    left = self.expression(RawExpression::FunctionCall {
+                        name,
+                        arguments,
+                    });
+                }
+                _ => break,
+            }
+        }
+
+        Ok(left)
     }
 
     fn statement(&mut self, node: RawStatement<'a>) -> Statement<'a> {

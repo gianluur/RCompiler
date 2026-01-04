@@ -23,6 +23,7 @@ pub enum ErrorCode {
     ET010,
     ET011,
     ET012,
+    EP000,
     EP001,
     EP002,
     EP003,
@@ -53,7 +54,10 @@ pub enum ErrorCode {
     EP028,
     EP029,
     EP030,
-
+    EP031,
+    EP032,
+    EP033,
+    EP034,
 }
 
 // #[derive(Debug, PartialEq, Clone, Copy)]
@@ -87,6 +91,7 @@ impl DiagnosticCode for ErrorCode {
             Self::ET012 => "Unterminated string literal: missing closing double quote",
 
             // === Parser Errors === //
+            Self::EP000 => "Expected an if statement before else or else if statements",
             Self::EP001 => "Expected array size inside brackets",
             Self::EP002 => "Expected closing bracket after array size",
             Self::EP003 => "Expected a name after type in variable declaration",
@@ -116,7 +121,12 @@ impl DiagnosticCode for ErrorCode {
             Self::EP027 => "Expected a closing parenthesis for function parameters",
             Self::EP028 => "Expected a type for parameter",
             Self::EP029 => "Expected a name after parameter",
-            Self::EP030 => "Expected another parameter for the function"
+            Self::EP030 => "Expected another parameter for the function",
+            Self::EP031 => "Expected closing ')' after expression",            
+            Self::EP032 => "Expected an identifier, literal, '(', or unary operator ('-', '!')",
+            Self::EP033 => "Expected a closing ']' for array access",
+            Self::EP034 => "Expected a valid function name before '('"
+
         }
     }
 }
