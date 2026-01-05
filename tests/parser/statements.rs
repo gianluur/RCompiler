@@ -9,7 +9,7 @@ mod tests {
     fn tok(kind: TokenKind, lit: &'static str) -> Token<'static> {
         Token {
             kind,
-            span: TokenSpan { start: 0, end: 0, literal: lit },
+            span: TokenSpan { start: 0, end: 0, literal: lit, line: 0, column: 0 },
         }
     }
 

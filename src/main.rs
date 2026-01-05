@@ -10,6 +10,8 @@ use tokenizer::{Token, Tokenizer};
 mod parser;
 use parser::{Parser as MyParser};
 
+mod semantics;
+
 fn get_source_code() -> (String, String) {
     #[derive(Parser, Debug)]
     #[command(author, about = "gianluur's compiler for his shell (RShell).", long_about = None)]

@@ -158,12 +158,14 @@ impl fmt::Display for TokenKind {
 pub struct TokenSpan<'a> {
     pub start: usize,
     pub end: usize,
-    pub literal: &'a str
+    pub literal: &'a str,
+    pub line: usize,
+    pub column: usize,
 }
 
 impl<'a> TokenSpan<'a> {
-    pub fn new(start: usize, end: usize, literal: &'a str) -> Self {
-        Self { start, end, literal }
+    pub fn new(start: usize, end: usize, literal: &'a str, line: usize, column: usize) -> Self {
+        Self { start, end, literal, line, column }
     }
 }
 
@@ -299,7 +301,7 @@ impl<'a> Tokenizer<'a> {
 
         tokens.push(Token {
             kind: TokenKind::Eof,
-            span: TokenSpan::new(self.end, self.end, ""),
+            span: TokenSpan::new(self.end, self.end, "", self.line, self.column),
         });
 
         Ok(tokens)
@@ -727,14 +729,14 @@ impl<'a> Tokenizer<'a> {
     fn token(&self, kind: TokenKind) -> Result<Option<Token<'a>>, TokenizerError<'a>> {
         Ok(Some(Token {
             kind,
-            span: TokenSpan::new(self.start, self.end, &self.source[self.start..self.end]),
+            span: TokenSpan::new(self.start, self.end, &self.source[self.start..self.end], self.line, self.column),
         }))
     }
 
     fn error<T>(&self, code: ErrorCode) -> Result<T, TokenizerError<'a>> {
         Err(TokenizerError {
             code,
-            span: TokenSpan::new(self.start, self.end, &self.source[self.start..self.end]),
+            span: TokenSpan::new(self.start, self.end, &self.source[self.start..self.end], self.line, self.column),
             line: self.line,
             column: self.column,
         })

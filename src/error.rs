@@ -2,8 +2,7 @@ use std::fs::File;
 use std::io::{self, BufRead, BufReader};
 
 trait DiagnosticCode where Self: std::fmt::Debug {
-
-fn message(&self) -> &'static str;
+    fn message(&self) -> &'static str;
     fn code_str(&self) -> String {
         format!("{:?}", self)
     }
@@ -68,30 +67,23 @@ pub enum ErrorCode {
 impl DiagnosticCode for ErrorCode {
     fn message(&self) -> &'static str {
         match self {
-            // === Tokenizer Errors === //
             
-            // Numeric Literals
+            // === Tokenizer Errors === //
             Self::ET001 => "Numeric literal contains multiple decimal points",
             Self::ET002 => "Identifiers cannot immediately follow a numeric literal",
             Self::ET003 => "Numeric literal cannot end with a trailing decimal point",
-            
-            // Lexing / Characters
             Self::ET004 => "Unexpected or unrecognized character in source",
             Self::ET005 => "Character literal must contain exactly one character",
             Self::ET006 => "Character literal cannot be empty",
             Self::ET007 => "Unterminated character literal: missing closing single quote",
             Self::ET008 => "Unterminated character literal: closing quote is being escaped",
-            
-            // Escape Sequences & Encoding
             Self::ET009 => "Unknown or invalid escape sequence",
             Self::ET010 => "Invalid octal character escape",
             Self::ET011 => "Invalid hexadecimal character escape",
-            
-            // String Literals
             Self::ET012 => "Unterminated string literal: missing closing double quote",
 
             // === Parser Errors === //
-            Self::EP000 => "Expected 'if' before 'else' or 'else if'",
+            Self::EP000 => "Expected 'if' before 'else' or 'elif'",
             Self::EP001 => "Expected array size inside '[]'",
             Self::EP002 => "Expected ']' after array size",
             Self::EP003 => "Expected an identifier after type in variable declaration",
