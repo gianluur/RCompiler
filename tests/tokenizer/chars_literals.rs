@@ -1,18 +1,23 @@
 use rcompiler::tokenizer::*;
 use rcompiler::error::*;
+use rcompiler::interner::*;
 
 #[cfg(test)]
 mod char_literal_tests {
     use super::*;
 
-    fn tokenize<'a>(input: &'a str) -> Result<Vec<Token<'a>>, TokenizerError<'a>> {
-        let mut tokenizer = Tokenizer::new(input);
-        tokenizer.tokenize()
+    fn tokenize(input: &str) -> (Result<Vec<Token>, TokenizerError>, Interner) {
+        let mut interner = Interner::new();
+        let result = {
+            let mut tokenizer = Tokenizer::new(input, &mut interner);
+            tokenizer.tokenize()
+        };
+        (result, interner)
     }
 
     macro_rules! assert_char_literal_success {
         ($input:expr, $expected_literal:expr) => {{
-            let result = tokenize($input);
+            let (result, interner) = tokenize($input);
             assert!(result.is_ok(), "Input: \"{}\" failed with error: {:?}", $input, result.err());
 
             let tokens = result.unwrap();
@@ -21,13 +26,15 @@ mod char_literal_tests {
             
             let char_token = &tokens[0];
             assert_eq!(char_token.kind, TokenKind::CharLiteral, "Input: \"{}\". Token kind mismatch.", $input);
-            assert_eq!(char_token.span.literal, $expected_literal, "Input: \"{}\". Literal value mismatch.", $input);
+            
+            let actual_literal = interner.lookup(char_token.span.literal);
+            assert_eq!(actual_literal, $expected_literal, "Input: \"{}\". Literal value mismatch.", $input);
         }};
     }
 
     macro_rules! assert_char_literal_error {
         ($input:expr, $expected_error_code:path, $description:expr) => {{
-            let result = tokenize($input);
+            let (result, interner) = tokenize($input);
             assert!(result.is_err(), "Input: \"{}\" unexpectedly succeeded", $input);
             
             let err = result.unwrap_err();
@@ -39,7 +46,7 @@ mod char_literal_tests {
                 $input, 
                 $expected_error_code, 
                 err.code, 
-                err.span.literal
+                interner.lookup(err.span.literal)
             );
         }};
     }

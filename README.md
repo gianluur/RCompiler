@@ -1,7 +1,8 @@
 # RCompiler
 
 ## Purpose
-This the recreation of my old compiler i made in C++, i am recreating it in rust, mainly because i will need some sort of scripting language for my [shell](www.github.com/gianluur/RShell).
+This the recreation of my old compiler i made in C++, i am recreating it in rust, mainly because i will need some sort of scripting language for my [shell](www.github.com/gianluur/RShell). But before doing that i will
+make it compile to native machine code, so i can also have a truly functional programming language of my own
 
 ## Features
 Should be a strongly typed language, without classes or oop, but with some sort of namespaces to properly order your code and to improve usability.

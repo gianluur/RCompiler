@@ -2,6 +2,7 @@ use core::fmt;
 use std::{char, collections::HashMap, iter::Peekable, str::Chars};
 
 use crate::error::*;
+use crate::interner::*;
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum TokenKind {
@@ -13,6 +14,7 @@ pub enum TokenKind {
     FloatLiteral,
     CharLiteral,
     StringLiteral,
+    BooleanLiteral,
     Plus,
     Minus,
     Multiplication,
@@ -73,8 +75,6 @@ pub enum TokenKind {
     Continue,
     Function,
     Return,
-    True,
-    False,
 }
 
 impl fmt::Display for TokenKind {
@@ -88,6 +88,7 @@ impl fmt::Display for TokenKind {
             Self::FloatLiteral => write!(f, "FloatLiteral"),
             Self::CharLiteral => write!(f, "CharLiteral"),
             Self::StringLiteral => write!(f, "StringLiteral"),
+            Self::BooleanLiteral => write!(f, "BooleanLiteral"),
             Self::Plus => write!(f, "+"),
             Self::Minus => write!(f, "-"),
             Self::Multiplication => write!(f, "*"),
@@ -148,43 +149,41 @@ impl fmt::Display for TokenKind {
             Self::Continue => write!(f, "continue"),
             Self::Function => write!(f, "fn"),
             Self::Return => write!(f, "return"),
-            Self::True => write!(f, "true"),
-            Self::False => write!(f, "false"),
         }
     }
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
-pub struct TokenSpan<'a> {
+pub struct TokenSpan {
     pub start: usize,
     pub end: usize,
-    pub literal: &'a str,
+    pub literal: SourceLiteral,
     pub line: usize,
     pub column: usize,
 }
 
-impl<'a> TokenSpan<'a> {
-    pub fn new(start: usize, end: usize, literal: &'a str, line: usize, column: usize) -> Self {
-        Self { start, end, literal, line, column }
-    }
-}
-
-impl<'a> fmt::Display for TokenSpan<'a> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.literal)
+impl TokenSpan {
+    pub fn new(start: usize, end: usize, literal: SourceLiteral, line: usize, column: usize) -> Self {
+        Self { 
+            start, 
+            end, 
+            literal, 
+            line, 
+            column 
+        }
     }
 }
 
 #[derive(Debug, PartialEq)]
-pub struct TokenizerError<'a> {
+pub struct TokenizerError {
     pub code: ErrorCode,
-    pub span: TokenSpan<'a> ,
+    pub span: TokenSpan ,
     pub line: usize,
     pub column: usize
 }
 
-impl<'a> TokenizerError<'a>  {
-    pub fn to_diagnostic(&'a self, filename: &'a str) -> Diagnostic<'a> {
+impl TokenizerError  {
+    pub fn to_diagnostic<'a>(&'a self, filename: &'a str) -> Diagnostic<'a> {
         Diagnostic {
             kind: DiagnosticKind::Error(self.code),
             info: DiagnosticInfo { 
@@ -216,18 +215,14 @@ impl<'a> TokenizerError<'a>  {
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
-pub struct Token<'a>  {
+pub struct Token  {
     pub kind: TokenKind,
-    pub span: TokenSpan<'a> ,
+    pub span: TokenSpan ,
 }
 
-impl<'a> fmt::Display for Token<'a> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Kind: {} | Literal: {}", self.kind, self.span)
-    }
-}
+pub struct Tokenizer<'a, 'i> {
+    interner: &'i mut Interner,
 
-pub struct Tokenizer<'a> {
     source: &'a str,
     input: Peekable<Chars<'a>>,
     keywords: HashMap<&'a str, TokenKind>,
@@ -241,8 +236,8 @@ pub struct Tokenizer<'a> {
     column: usize,
 }
 
-impl<'a> Tokenizer<'a> {
-    pub fn new(input: &'a str) -> Self {
+impl<'a, 'i> Tokenizer<'a, 'i> {
+    pub fn new(input: &'a str, interner: &'i mut Interner) -> Self {
         let mut keywords: HashMap<&str, TokenKind> = HashMap::new();
         keywords.insert("if", TokenKind::If);
         keywords.insert("elif", TokenKind::ElseIf);
@@ -252,8 +247,6 @@ impl<'a> Tokenizer<'a> {
         keywords.insert("continue", TokenKind::Continue);
         keywords.insert("fn", TokenKind::Function);
         keywords.insert("return", TokenKind::Return);
-        keywords.insert("true", TokenKind::True);
-        keywords.insert("false", TokenKind::False);
         keywords.insert("const", TokenKind::Const);
         keywords.insert("i8", TokenKind::SignedInt8);
         keywords.insert("i16", TokenKind::SignedInt16);
@@ -271,6 +264,8 @@ impl<'a> Tokenizer<'a> {
         keywords.insert("null", TokenKind::Null);
 
         Self { 
+            interner,
+
             source: input,
             input: input.chars().peekable(), 
             keywords,
@@ -285,8 +280,8 @@ impl<'a> Tokenizer<'a> {
         }
     }
 
-    pub fn tokenize(&mut self) -> Result<Vec<Token<'a>>, TokenizerError<'a>> {
-        let mut tokens: Vec<Token<'a>> = Vec::new();
+    pub fn tokenize(&mut self) -> Result<Vec<Token>, TokenizerError> {
+        let mut tokens: Vec<Token> = Vec::new();
 
         while let Some(_) = self.next() {
             if self.character.is_whitespace() {
@@ -299,15 +294,14 @@ impl<'a> Tokenizer<'a> {
             }
         }
 
-        tokens.push(Token {
-            kind: TokenKind::Eof,
-            span: TokenSpan::new(self.end, self.end, "", self.line, self.column),
-        });
+        if let Ok(token) = self.token(TokenKind::Eof) {
+            tokens.push(token.unwrap());
+        }
 
         Ok(tokens)
     }
 
-    fn get_token(&mut self) -> Result<Option<Token<'a>>, TokenizerError<'a>> {
+    fn get_token(&mut self) -> Result<Option<Token>, TokenizerError> {
         if self.character.is_ascii_digit() {
             self.parse_number()
         } 
@@ -319,7 +313,7 @@ impl<'a> Tokenizer<'a> {
         }
     }
 
-    fn parse_number(&mut self) -> Result<Option<Token<'a>>, TokenizerError<'a>> {
+    fn parse_number(&mut self) -> Result<Option<Token>, TokenizerError> {
         let mut dots: i8 = 0; 
 
         while let Some(next) = self.peek() { 
@@ -352,6 +346,7 @@ impl<'a> Tokenizer<'a> {
         }
 
         let literal: &str = &self.source[self.start..self.end];
+
         if dots == 0 {
             return self.token(TokenKind::IntegerLiteral);
         }
@@ -364,7 +359,7 @@ impl<'a> Tokenizer<'a> {
         }
     }
 
-    fn parse_text(&mut self) -> Result<Option<Token<'a>>, TokenizerError<'a>> {
+    fn parse_text(&mut self) -> Result<Option<Token>, TokenizerError> {
         while let Some(next) = self.peek() {
             if next.is_ascii_alphanumeric() || next == '_' {
                 self.next().unwrap();
@@ -379,12 +374,15 @@ impl<'a> Tokenizer<'a> {
         if let Some(&keyword) = self.keywords.get(literal) {
             return self.token(keyword);
         }
+        else if literal == "true" || literal == "false" {
+            return self.token(TokenKind::BooleanLiteral);
+        }
         else {
             return self.token(TokenKind::Identifier);
         }
     }
     
-    fn parse_symbol(&mut self) -> Result<Option<Token<'a>>, TokenizerError<'a>> {
+    fn parse_symbol(&mut self) -> Result<Option<Token>, TokenizerError> {
         match self.character {
             '+' => {
                 if self.match_next('=') {
@@ -534,7 +532,7 @@ impl<'a> Tokenizer<'a> {
         }
     }
 
-    fn parse_char(&mut self) -> Result<Option<Token<'a>>, TokenizerError<'a>> {
+    fn parse_char(&mut self) -> Result<Option<Token>, TokenizerError> {
         let mut chars_count: u8 = 0;
         let mut is_escaping_single_quote: bool = false;
 
@@ -574,7 +572,7 @@ impl<'a> Tokenizer<'a> {
         self.token(TokenKind::CharLiteral)
     }
 
-    fn parse_inner_char(&mut self) -> Result<bool, TokenizerError<'a>> {
+    fn parse_inner_char(&mut self) -> Result<bool, TokenizerError> {
         if self.character == '\\' {
             return self.parse_escape_sequence();
         }
@@ -583,7 +581,7 @@ impl<'a> Tokenizer<'a> {
         return Ok(false)
     }
 
-    fn parse_escape_sequence(&mut self) -> Result<bool, TokenizerError<'a>> {
+    fn parse_escape_sequence(&mut self) -> Result<bool, TokenizerError> {
         if let Some(next) = self.peek() {
             self.next().unwrap();
 
@@ -614,7 +612,7 @@ impl<'a> Tokenizer<'a> {
         }
     }
 
-    fn parse_octal(&mut self) -> Result<(), TokenizerError<'a>> {
+    fn parse_octal(&mut self) -> Result<(), TokenizerError> {
         let mut is_invalid: bool = false;
         let mut digit_count: u8 = 1; 
 
@@ -637,7 +635,7 @@ impl<'a> Tokenizer<'a> {
         Ok(())
     }
 
-    fn parse_hex(&mut self) -> Result<(), TokenizerError<'a>> {
+    fn parse_hex(&mut self) -> Result<(), TokenizerError> {
         let mut is_invalid: bool = false;
         let mut digit_count: u8 = 0;
         
@@ -663,7 +661,7 @@ impl<'a> Tokenizer<'a> {
         Ok(())
     }
 
-    fn parse_string(&mut self) -> Result<Option<Token<'a>>, TokenizerError<'a>> {
+    fn parse_string(&mut self) -> Result<Option<Token>, TokenizerError> {
         self.is_parsing_string_literal = true;
 
         while let Some(next) = self.peek() {
@@ -690,7 +688,7 @@ impl<'a> Tokenizer<'a> {
         self.token(TokenKind::StringLiteral)
     }
 
-    fn parse_comment(&mut self) -> Result<Option<Token<'a>>, TokenizerError<'a>> {
+    fn parse_comment(&mut self) -> Result<Option<Token>, TokenizerError> {
         while let Some(next) = self.peek() {
             if next == '\n' {
                 break;
@@ -726,17 +724,29 @@ impl<'a> Tokenizer<'a> {
         }
     }
 
-    fn token(&self, kind: TokenKind) -> Result<Option<Token<'a>>, TokenizerError<'a>> {
+    fn token(&mut self, kind: TokenKind) -> Result<Option<Token>, TokenizerError> {
         Ok(Some(Token {
             kind,
-            span: TokenSpan::new(self.start, self.end, &self.source[self.start..self.end], self.line, self.column),
+            span: TokenSpan::new(
+                self.start, 
+                self.end, 
+                self.store_literal(), 
+                self.line, 
+                self.column
+            ),
         }))
     }
 
-    fn error<T>(&self, code: ErrorCode) -> Result<T, TokenizerError<'a>> {
+    fn error<T>(&mut self, code: ErrorCode) -> Result<T, TokenizerError> {
         Err(TokenizerError {
             code,
-            span: TokenSpan::new(self.start, self.end, &self.source[self.start..self.end], self.line, self.column),
+            span: TokenSpan::new(
+                self.start, 
+                self.end, 
+                self.store_literal(), 
+                self.line, 
+                self.column
+            ),
             line: self.line,
             column: self.column,
         })
@@ -750,5 +760,10 @@ impl<'a> Tokenizer<'a> {
         else {
             return false;
         }
+    }
+
+    fn store_literal(&mut self) -> SourceLiteral {
+        let raw_str: &str = &self.source[self.start..self.end];
+        self.interner.intern(raw_str)
     }
 }

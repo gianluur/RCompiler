@@ -57,6 +57,11 @@ pub enum ErrorCode {
     EP032,
     EP033,
     EP034,
+    EP035,
+    EP036,
+    EP037,
+    EP038,
+    ES000,
 }
 
 // #[derive(Debug, PartialEq, Clone, Copy)]
@@ -118,6 +123,11 @@ impl DiagnosticCode for ErrorCode {
             Self::EP032 => "Expected identifier, literal, '(', '-', or '!'",
             Self::EP033 => "Expected ']' for array access",
             Self::EP034 => "Expected a valid function name before '('",
+            Self::EP035 => "Expected a non-const type for cast expression",
+            Self::EP036 => "Expected a '(' after type while casting",
+            Self::EP037 => "Expected an expression inside cast operation",
+            Self::EP038 => "Expected ')' after cast operation",
+            Self::ES000 => "Placeholder for semantic errors",
 
         }
     }

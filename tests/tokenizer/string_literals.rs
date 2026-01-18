@@ -1,26 +1,28 @@
 use rcompiler::tokenizer::*;
 use rcompiler::error::ErrorCode;
+use rcompiler::interner::*;
 
 #[cfg(test)]
 mod string_literal_tests {
     use super::*;
 
-    fn get_string_literals<'a>(input: &'a str) -> Result<Vec<&'a str>, TokenizerError<'a>> {
-        let mut tokenizer = Tokenizer::new(input);
-        let tokens = tokenizer.tokenize()?;
-        let mut out = Vec::new();
-        for t in tokens {
-            if matches!(t.kind, TokenKind::StringLiteral) {
-                // No clone! We just store the reference (&str)
-                out.push(t.span.literal);
-            }
-        }
-        Ok(out)
+    fn tokenize_strings(input: &str) -> (Result<Vec<String>, TokenizerError>, Interner) {
+        let mut interner = Interner::new();
+        let result = {
+            let mut tokenizer = Tokenizer::new(input, &mut interner);
+            tokenizer.tokenize().map(|tokens| {
+                tokens.into_iter()
+                    .filter(|t| matches!(t.kind, TokenKind::StringLiteral))
+                    .map(|t| interner.lookup(t.span.literal).to_string())
+                    .collect()
+            })
+        };
+        (result, interner)
     }
 
     macro_rules! assert_string_literal_error {
         ($input:expr, $expected_error_code:path) => {{
-            let result = get_string_literals($input);
+            let (result, _) = tokenize_strings($input);
             assert!(result.is_err(), "Input: \"{}\" unexpectedly succeeded", $input);
             
             let err = result.unwrap_err();
@@ -50,7 +52,8 @@ mod string_literal_tests {
         ];
 
         for (input, expected) in valid_cases {
-            match get_string_literals(input) {
+            let (result, _) = tokenize_strings(input);
+            match result {
                 Ok(strings) => {
                     assert_eq!(strings.len(), 1, "Expected exactly 1 literal for input: {input}");
                     assert_eq!(strings[0], expected, "Literal mismatch for input: {input}");
@@ -80,18 +83,20 @@ mod string_literal_tests {
 
     #[test]
     fn test_bug_trigger_cases() {
-        
-        match get_string_literals(r#""a\b""#) {
+        let (res1, _) = tokenize_strings(r#""a\b""#);
+        match res1 {
             Ok(v) => assert_eq!(v[0], r#""a\b""#),
             Err(e) => panic!("`\"a\\b\"` unexpectedly errored: {:?}", e),
         }
         
-        match get_string_literals(r#""\\""#) {
+        let (res2, _) = tokenize_strings(r#""\\""#);
+        match res2 {
             Ok(v) => assert_eq!(v[0], r#""\\""#),
             Err(e) => panic!("`\"\\\\\"` unexpectedly errored: {:?}", e),
         }
 
-        match get_string_literals(r#""\nX""#) {
+        let (res3, _) = tokenize_strings(r#""\nX""#);
+        match res3 {
             Ok(v) => assert_eq!(v[0], r#""\nX""#),
             Err(e) => panic!("`\"\\nX\"` unexpectedly errored: {:?}", e),
         }

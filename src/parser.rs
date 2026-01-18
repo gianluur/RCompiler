@@ -1,147 +1,9 @@
 use crate::tokenizer::{Token, TokenKind, TokenSpan};
+use crate::ast::*;
 use crate::error::*;
+use crate::interner::*;
 
 use core::panic;
-
-#[derive(Debug, Clone, Copy)]
-pub struct StatementSpan {
-    pub start: usize,
-    pub end: usize,
-}
-
-#[derive(Clone)]
-pub struct Spanned<T> {
-    pub node: T,
-    pub span: StatementSpan,
-}
-
-impl<T: std::fmt::Debug> std::fmt::Debug for Spanned<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.node.fmt(f)
-    }
-}
-
-#[derive(Debug, Clone)]
-pub enum RawExpression<'a> {
-    Variable(&'a str),
-    Literal {
-        kind: TokenKind,
-        value: &'a str,
-    },
-    Binary {
-        left: Expression<'a>,
-        operator: TokenKind,
-        right: Expression<'a>,
-    },
-    Unary {
-        operator: TokenKind,
-        operand: Expression<'a>, 
-    },
-    FunctionCall {
-        name: &'a str,
-        arguments: Vec<Expression<'a>>,
-    },
-    ArrayAccess {
-        array: Expression<'a>,
-        index: Expression<'a>,
-    },
-}
-
-impl<'a> RawExpression<'a> {
-    pub fn is(kind: TokenKind) -> bool {
-        use TokenKind::*;
-        matches!(kind,
-            IntegerLiteral | FloatLiteral | CharLiteral | StringLiteral |
-            LeftParen | RightParen | True | False | Identifier | Minus | Not
-        )
-    }
-
-    pub fn get_binding_power(kind: TokenKind) -> (u8, u8) {
-        match kind {
-            // Low precedence
-            TokenKind::Plus | TokenKind::Minus => (1, 2),
-            // Higher
-            TokenKind::Multiplication | TokenKind::Division | TokenKind::Modulus => (3, 4),
-            // Highest (Function calls and Array access)
-            TokenKind::LeftParen | TokenKind::LeftBracket => (5, 6),
-            _ => (0, 0),
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub enum RawStatement<'a> {
-    VariableDeclaration {
-        is_const: bool,
-        type_: Type<'a>,
-        name: &'a str,
-        value: Option<Expression<'a>>,
-    },
-    VariableAssignment {
-        name: &'a str,
-        operator: TokenKind,
-        value: Expression<'a>,
-    },
-    If {
-        condition: Expression<'a>,
-        body: Body<'a>,
-        elses: Vec<ElseBranch<'a>>,
-    },
-    While {
-        condition: Expression<'a>,
-        body: Body<'a>,
-    },
-    LoopControl(&'a str),
-    Function {
-      name: &'a str,
-      parameters: Vec<Parameter<'a>>,
-      type_: TokenKind,
-      body: Body<'a>
-    },
-    Return(Option<Expression<'a>>),
-    FunctionCall {
-        name: &'a str,
-        arguments: Vec<Expression<'a>>,
-    },
-}
-
-#[derive(Debug, Clone)]
-pub enum ElseBranch<'a> {
-    ElseIf(Statement<'a>),
-    Else(Body<'a>),
-}
-
-#[derive(Debug, Clone)]
-pub struct Type<'a> {
-    pub kind: TokenKind,
-    pub is_array: bool,
-    pub array_length: Option<Expression<'a>>,
-}
-
-impl<'a> Type<'a> {    
-    pub fn is(kind: TokenKind) -> bool {
-        use TokenKind::*;
-        matches!(kind, 
-            SignedInt8 | SignedInt16 | SignedInt32 | SignedInt64 |
-            UnsignedInt8 | UnsignedInt16 | UnsignedInt32 | UnsignedInt64 |
-            Float32 | Float64 | Character | String | Boolean | Const
-        )
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct Parameter<'a> {
-    pub name: &'a str,
-    pub type_: Type<'a>,
-}
-
-#[derive(Debug, Clone)]
-pub struct Body<'a> {
-    pub statements: Vec<Statement<'a>>,
-}
-
-pub type Expression<'a> = Box<Spanned<RawExpression<'a>>>;
-pub type Statement<'a> = Box<Spanned<RawStatement<'a>>>;
 
 pub trait TokenMatcher {
     fn matches(&self, kind: TokenKind) -> bool;
@@ -219,9 +81,9 @@ impl ParserError {
     }
 }
 
-pub struct Parser<'a> {
-    tokens: std::iter::Peekable<std::vec::IntoIter<Token<'a>>>,
-    peeked: Token<'a>,
+pub struct Parser {
+    tokens: std::iter::Peekable<std::vec::IntoIter<Token>>,
+    peeked: Token,
 
     // Tracking current stament span state
     statement_start: usize,
@@ -241,14 +103,21 @@ pub struct Parser<'a> {
     inside_function: bool,
 }
 
-impl<'a> Parser<'a> {
-    pub fn new(tokens: Vec<Token<'a>>) -> Self {        
+impl Parser {
+    pub fn new(tokens: Vec<Token>) -> Self {        
         Self {
             tokens: tokens.into_iter().peekable(),
             peeked: Token{ 
                 kind: TokenKind::Eof, 
-                span: TokenSpan { start: 0, end: 0, literal: "", line: 0, column: 0 } 
+                span: TokenSpan { 
+                    start: 0, 
+                    end: 0, 
+                    literal: SourceLiteral::dummy(), 
+                    line: 0, 
+                    column: 0 
+                } 
             },
+
             statement_start: 0,
             statement_end: 0,
             expression_end: 0,
@@ -263,8 +132,8 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse(&mut self) -> Result<Vec<Statement<'a>>, ParserError> {
-        let mut statements: Vec<Statement<'a>> = Vec::new();
+    pub fn parse(&mut self) -> Result<Vec<Statement>, ParserError> {
+        let mut statements: Vec<Statement> = Vec::new();
 
         while let Some(_) = self.peek() {
             if self.peeked.kind == TokenKind::Eof {
@@ -277,7 +146,7 @@ impl<'a> Parser<'a> {
         Ok(statements)
     }
 
-    fn get_statement(&mut self) -> Result<Statement<'a>, ParserError> {
+    fn get_statement(&mut self) -> Result<Statement, ParserError> {
         self.statement_start = self.peeked.span.start;
 
         if self.is_variable() {
@@ -338,9 +207,19 @@ impl<'a> Parser<'a> {
                self.match_peek(TokenKind::Continue);
     }
 
-    fn parse_type(&mut self) -> Result<Type<'a>, ParserError> {
+    fn is_const(&mut self) -> bool {
+        let mut is_const: bool = false; 
+        if self.peeked.kind == TokenKind::Const {
+            self.next();
+            is_const = true;
+        }
+
+        is_const
+    }
+
+    fn parse_type(&mut self) -> Result<Type, ParserError> {
         let kind: TokenKind  = self.next().kind; // Consumes the kind like 'i32'
-        let mut array_length: Option<Expression<'a>> = None; // Stores the array size
+        let mut array_length: Option<Expression> = None; // Stores the array size
         let mut is_array: bool = false; // Check if the type is an array type
 
         // Check for a left bracket '['
@@ -363,18 +242,13 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn parse_variable(&mut self) -> Result<Statement<'a>, ParserError> {       
+    fn parse_variable(&mut self) -> Result<Statement, ParserError> {       
         // Check if the variable is const 
-        let mut is_const: bool = false; 
-        if self.peeked.kind == TokenKind::Const {
-            self.next();
-            is_const = true;
-        }
-
+        let is_const: bool = self.is_const();
         let type_: Type = self.parse_type()?;
-        let name: &str = self.expect_next(TokenKind::Identifier, 
+        let name: SourceLiteral  = self.expect_next(TokenKind::Identifier, 
             ErrorCode::EP003)?.span.literal;
-        let mut value: Option<Expression<'a>> = None;
+        let mut value: Option<Expression> = None;
 
         // This is a declaration without an initial value
         if self.match_peek(TokenKind::Semicolon) {
@@ -413,13 +287,13 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_if_statement(&mut self) -> Result<Statement<'a>, ParserError> {
+    fn parse_if_statement(&mut self) -> Result<Statement, ParserError> {
         // This checks and the inside_elif check serves to prevent infinite loops
         // and to provide better errors
         self.inside_if = true; 
 
-        let condition: Expression<'a>;
-        let body: Body<'a>;
+        let condition: Expression;
+        let body: Body;
         let mut elses: Vec<ElseBranch> = Vec::new();
 
         self.next(); // Consumes the 'if' keyword or 'elif' keyword
@@ -459,10 +333,10 @@ impl<'a> Parser<'a> {
 
     }
 
-    fn parse_body(&mut self) -> Result<Body<'a>, ParserError> {
+    fn parse_body(&mut self) -> Result<Body, ParserError> {
         self.next(); // Consumes '{'
 
-        let mut statements: Vec<Statement<'a>> = Vec::new();
+        let mut statements: Vec<Statement> = Vec::new();
         
         // Consumes all the various statements that are inside the body
         while let Some(_) = self.peek() {
@@ -485,12 +359,12 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn parse_while_statement(&mut self) -> Result<Statement<'a>, ParserError> {
+    fn parse_while_statement(&mut self) -> Result<Statement, ParserError> {
         self.inside_while = true;
         self.next(); // Consumes the 'while' keyword
 
-        let condition: Expression<'a>;
-        let body: Body<'a>;
+        let condition: Expression;
+        let body: Body;
 
         // Consumes the condtion
         self.expect_peek(RawExpression::is, ErrorCode::EP011)?;
@@ -510,8 +384,8 @@ impl<'a> Parser<'a> {
         ))
     }
 
-    fn parse_identifier(&mut self) -> Result<Statement<'a>, ParserError> {
-        let identifier: Token<'a> = self.next();
+    fn parse_identifier(&mut self) -> Result<Statement, ParserError> {
+        let identifier: Token = self.next();
 
         // If the next token is an assigment operator (=, +=, -=, etc.)
         // Then it's a variable assignment
@@ -528,7 +402,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_function_call(&mut self, name: Token<'a>) -> Result<Statement<'a>, ParserError> {
+    fn parse_function_call(&mut self, name: Token) -> Result<Statement, ParserError> {
         // Function call are a bit more complex because they can be either
         // expression or statements, this function here parse the statement version
         // which is usually points to a function with no return value
@@ -547,7 +421,7 @@ impl<'a> Parser<'a> {
         }))
     }
 
-    fn parse_arguments(&mut self) -> Result<Vec<Expression<'a>>, ParserError> {
+    fn parse_arguments(&mut self) -> Result<Vec<Expression>, ParserError> {
         let mut arguments: Vec<Expression> = Vec::new();
         
         // Loop to get all the arguments
@@ -584,12 +458,12 @@ impl<'a> Parser<'a> {
         Ok(arguments)
     }
 
-    fn parse_variable_assignment(&mut self, name: Token<'a>) -> Result<Statement<'a>, ParserError> {
+    fn parse_variable_assignment(&mut self, name: Token) -> Result<Statement, ParserError> {
         let operator: TokenKind = self.next().kind; // Consumes the '=', '+=' and similar
         
         // Consumes the expression to assing to the variable
         self.expect_peek(RawExpression::is, ErrorCode::EP018)?;
-        let value: Expression<'a> = self.parse_expression(0)?;
+        let value: Expression = self.parse_expression(0)?;
         
         // Consumes the ';'
         self.expect_next(TokenKind::Semicolon, ErrorCode::EP019)?;
@@ -602,8 +476,8 @@ impl<'a> Parser<'a> {
         }))
     }
 
-    fn parse_loop_control(&mut self) -> Result<Statement<'a>, ParserError> {
-        let keyword: Token<'a> = self.next(); // Parses either 'break' or 'continue'
+    fn parse_loop_control(&mut self) -> Result<Statement, ParserError> {
+        let keyword: Token = self.next(); // Parses either 'break' or 'continue'
 
         // Consumes the ';'
         self.expect_next(TokenKind::Semicolon, ErrorCode::EP020)?;
@@ -613,10 +487,10 @@ impl<'a> Parser<'a> {
         ))
     }
 
-    fn parse_return_statement(&mut self) -> Result<Statement<'a>, ParserError> {
+    fn parse_return_statement(&mut self) -> Result<Statement, ParserError> {
         self.next(); // Parses the 'return' keyword
         
-        let mut expression: Option<Expression<'a>> = None;
+        let mut expression: Option<Expression> = None;
 
         // This parses a return with no value 'return;'
         if self.match_peek(TokenKind::Semicolon) {
@@ -637,7 +511,7 @@ impl<'a> Parser<'a> {
         )
     }
 
-    fn parse_function(&mut self) -> Result<Statement<'a>, ParserError> {
+    fn parse_function(&mut self) -> Result<Statement, ParserError> {
         // This will help later on when i have to check for the validity
         // of a return statement, because if it's not in a function
         // it's obviously invalid
@@ -646,7 +520,7 @@ impl<'a> Parser<'a> {
         self.next(); // Consumes the 'fn' keyword
         
         // Consumes the name
-        let name: &'a str = self.expect_next(TokenKind::Identifier, 
+        let name: SourceLiteral = self.expect_next(TokenKind::Identifier, 
                     ErrorCode::EP023)?.span.literal;
         
         // Consumes the parameters
@@ -654,12 +528,12 @@ impl<'a> Parser<'a> {
         let parameters: Vec<Parameter> = self.parse_parameters()?;
         
         // This parses the type
-        let mut type_: TokenKind = TokenKind::Null;
+        let mut type_: Type = Type { kind: TokenKind::Null, is_array: false, array_length: None };
         // If the next token isn't a left brace then it's a type
         if !self.match_peek(TokenKind::LeftBrace){
             // Now if the token is actually type then parse it
             if self.match_peek(Type::is) {
-                type_ = self.parse_type()?.kind;
+                type_ = self.parse_type()?;
             }
             // Otherwise it's an error
             else {
@@ -669,7 +543,7 @@ impl<'a> Parser<'a> {
 
         // Consumes the body
         self.expect_peek(TokenKind::LeftBrace, ErrorCode::EP026)?;
-        let body: Body<'a> = self.parse_body()?;
+        let body: Body = self.parse_body()?;
 
         self.inside_function = false;
         Ok(self.statement(
@@ -682,7 +556,7 @@ impl<'a> Parser<'a> {
         ))
     }
 
-    fn parse_parameters(&mut self) -> Result<Vec<Parameter<'a>>, ParserError> {
+    fn parse_parameters(&mut self) -> Result<Vec<Parameter>, ParserError> {
         let mut parameters: Vec<Parameter> = Vec::new();
         
         // Loops to find all the parameters
@@ -698,15 +572,18 @@ impl<'a> Parser<'a> {
                 break;
             }
             
+            let is_const: bool = self.is_const();
+
             // Consumes the parameter type
             self.expect_peek(Type::is, ErrorCode::EP028)?;
-            let type_: Type<'a> = self.parse_type()?;
+            let type_: Type = self.parse_type()?;
 
             // Consumes the name
-            let name: &'a str = self.expect_next(TokenKind::Identifier, 
+            let name: SourceLiteral = self.expect_next(TokenKind::Identifier, 
                         ErrorCode::EP029)?.span.literal;
 
             parameters.push(Parameter {
+                is_const,
                 name, 
                 type_ 
             });
@@ -725,17 +602,17 @@ impl<'a> Parser<'a> {
         Ok(parameters)
     }
 
-    fn parse_expression(&mut self, min_bp: u8) -> Result<Expression<'a>, ParserError> {
+    // TODO: Provide errors function calls uses keyword names, add as hint
+    fn parse_expression(&mut self, min_bp: u8) -> Result<Expression, ParserError> {
         let expression_start: usize = self.peeked.span.start;
         
-        let token: Token<'a> = self.next(); // Consume the first token
+        let token: Token = self.next(); // Consume the first token
 
         // This is the first part of the expression 
         // So this is either a literal, variable, parenthesis or a unary operator
-        let mut left: Expression<'a> = match token.kind {
-            TokenKind::IntegerLiteral | TokenKind::FloatLiteral | 
-            TokenKind::CharLiteral    | TokenKind::StringLiteral |
-            TokenKind::True | TokenKind::False => {
+        let mut left: Expression = match token.kind {
+            TokenKind::IntegerLiteral | TokenKind::FloatLiteral | TokenKind::BooleanLiteral |
+            TokenKind::CharLiteral    | TokenKind::StringLiteral => {
                 self.expression(expression_start, 
                     RawExpression::Literal { 
                         kind: token.kind, 
@@ -748,6 +625,26 @@ impl<'a> Parser<'a> {
                 self.expression(expression_start, 
                     RawExpression::Variable(token.span.literal)
                 )
+            },
+
+            kind if Type::is(kind) => {
+                if kind == TokenKind::Const {
+                    return Err(self.error(ErrorCode::EP035));
+                }
+
+                // 1. Expect the opening parenthesis '('
+                self.expect_next(TokenKind::LeftParen, ErrorCode::EP036)?;
+
+                self.expect_peek(RawExpression::is, ErrorCode::EP037)?;
+                let expression: Expression = self.parse_expression(0)?;
+                
+                // 3. Expect the closing parenthesis ')'
+                self.expect_next(TokenKind::RightParen, ErrorCode::EP038)?;
+
+                self.expression(expression_start, RawExpression::Cast {
+                    kind,
+                    expression,
+                })
             },
             
             TokenKind::Minus | TokenKind::Not => {
@@ -763,7 +660,7 @@ impl<'a> Parser<'a> {
             
             TokenKind::LeftParen => {
                 // Grouping: reset BP to 0 to parse inside the parens
-                let expression: Expression<'a> = self.parse_expression(0)?;
+                let expression: Expression = self.parse_expression(0)?;
                 self.expect_next(TokenKind::RightParen, ErrorCode::EP031)?;
                 expression
             }
@@ -773,7 +670,7 @@ impl<'a> Parser<'a> {
 
         // This is the operator and the right part of the expression
         loop {
-            let operator: Token<'a> = match self.peek() {
+            let operator: Token = match self.peek() {
                     Some(t) if t.kind != TokenKind::Eof => t,
                     _ => break,
                 };
@@ -792,7 +689,7 @@ impl<'a> Parser<'a> {
                 TokenKind::Plus | TokenKind::Minus | 
                 TokenKind::Multiplication | TokenKind::Division |
                 TokenKind::Modulus => {
-                    let right: Expression<'a> = self.parse_expression(r_bp)?;
+                    let right: Expression = self.parse_expression(r_bp)?;
                     left = self.expression(expression_start, 
                             RawExpression::Binary {
                             left,
@@ -804,10 +701,10 @@ impl<'a> Parser<'a> {
 
                 // Array Access: name[index]
                 TokenKind::LeftBracket => {
-                    let index: Expression<'a> = self.parse_expression(0)?; // Inner expr
+                    let index: Expression = self.parse_expression(0)?; // Inner expr
                     self.expect_next(TokenKind::RightBracket, ErrorCode::EP033)?;
                     left = self.expression(expression_start, RawExpression::ArrayAccess {
-                        array: left,
+                        name: left,
                         index,
                     });
                 }
@@ -815,9 +712,9 @@ impl<'a> Parser<'a> {
                 // Function Call: name(arg1, arg2)
                 TokenKind::LeftParen => {
                     // Here 'left' is the function name (Expression::Variable)
-                    let name: &str = match left.node {
+                    let name: SourceLiteral = match left.node {
                         RawExpression::Variable(n) => n,
-
+            
                         // The error here means that it's trying to call a non-function
                         _ => return Err(self.error(ErrorCode::EP034)),
                     };
@@ -838,7 +735,7 @@ impl<'a> Parser<'a> {
         Ok(left)
     }
 
-    fn statement(&mut self, node: RawStatement<'a>) -> Statement<'a> {
+    fn statement(&mut self, node: RawStatement) -> Statement {
         Box::new(Spanned { 
             node, 
             span: StatementSpan { 
@@ -848,7 +745,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn expression(&mut self, expression_start: usize, node: RawExpression<'a>) -> Expression<'a> {
+    fn expression(&mut self, expression_start: usize, node: RawExpression) -> Expression {
         Box::new(Spanned { 
             node, 
             span: StatementSpan { 
@@ -871,7 +768,7 @@ impl<'a> Parser<'a> {
     }
 
 
-    fn next(&mut self) -> Token<'a> {
+    fn next(&mut self) -> Token {
         match self.tokens.next() {
             Some(token) => {
                 self.statement_end = token.span.end;
@@ -886,7 +783,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn peek(&mut self) -> Option<Token<'a>> { 
+    fn peek(&mut self) -> Option<Token> { 
         match self.tokens.peek() {
             Some(&token) => {
                 self.peeked = token;
@@ -905,7 +802,7 @@ impl<'a> Parser<'a> {
         return false;
     }
 
-    fn expect_next<M: TokenMatcher>(&mut self, matcher: M, error: ErrorCode) -> Result<Token<'a>, ParserError> {
+    fn expect_next<M: TokenMatcher>(&mut self, matcher: M, error: ErrorCode) -> Result<Token, ParserError> {
         if let Some(token) = self.peek() {
             if matcher.matches(token.kind) {
                 return Ok(self.next());
@@ -914,7 +811,7 @@ impl<'a> Parser<'a> {
         Err(self.error(error))
     }
 
-    fn expect_peek<M: TokenMatcher>(&mut self, matcher: M, error: ErrorCode) -> Result<Token<'a>, ParserError> {
+    fn expect_peek<M: TokenMatcher>(&mut self, matcher: M, error: ErrorCode) -> Result<Token, ParserError> {
         if let Some(token) = self.peek() {
             if matcher.matches(token.kind) {
                 return Ok(token);

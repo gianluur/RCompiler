@@ -1,5 +1,6 @@
 use rcompiler::tokenizer::*;
 use rcompiler::error::ErrorCode;
+use rcompiler::interner::*;
 
 #[cfg(test)]
 mod keywords_and_operators {
@@ -7,7 +8,8 @@ mod keywords_and_operators {
 
     #[test]
     fn test_all_keywords() {
-        let mut tokenizer = Tokenizer::new("if elif else while break continue fn return true false");
+        let mut interner = Interner::new();
+        let mut tokenizer = Tokenizer::new("if elif else while break continue fn return", &mut interner);
         let tokens = tokenizer.tokenize().unwrap();
 
         let expected_kinds = vec![
@@ -19,8 +21,6 @@ mod keywords_and_operators {
             TokenKind::Continue,
             TokenKind::Function,
             TokenKind::Return,
-            TokenKind::True,
-            TokenKind::False,
             TokenKind::Eof,
         ];
 
@@ -32,7 +32,8 @@ mod keywords_and_operators {
 
     #[test]
     fn test_all_type_keywords() {
-        let mut tokenizer = Tokenizer::new("i8 i16 i32 i64 u8 u16 u32 u64 f32 f64");
+        let mut interner = Interner::new();
+        let mut tokenizer = Tokenizer::new("i8 i16 i32 i64 u8 u16 u32 u64 f32 f64", &mut interner);
         let tokens = tokenizer.tokenize().unwrap();
 
         let expected_kinds = vec![
@@ -57,21 +58,23 @@ mod keywords_and_operators {
 
     #[test]
     fn test_keyword_prefix_as_identifier() {
-        let mut tokenizer = Tokenizer::new("if_block i8var");
+        let mut interner = Interner::new();
+        let mut tokenizer = Tokenizer::new("if_block i8var", &mut interner);
         let tokens = tokenizer.tokenize().unwrap();
 
         assert_eq!(tokens[0].kind, TokenKind::Identifier);
-        assert_eq!(tokens[0].span.literal, "if_block");
+        assert_eq!(interner.lookup(tokens[0].span.literal), "if_block");
 
         assert_eq!(tokens[1].kind, TokenKind::Identifier);
-        assert_eq!(tokens[1].span.literal, "i8var");
+        assert_eq!(interner.lookup(tokens[1].span.literal), "i8var");
 
         assert_eq!(tokens.len(), 3); // 2 Identifiers + EOF
     }
 
     #[test]
     fn test_relational_and_logical_operators() {
-        let mut tokenizer = Tokenizer::new("== != > < >= <= && || !");
+        let mut interner = Interner::new();
+        let mut tokenizer = Tokenizer::new("== != > < >= <= && || !", &mut interner);
         let tokens = tokenizer.tokenize().unwrap();
 
         let expected_kinds = vec![
@@ -94,13 +97,14 @@ mod keywords_and_operators {
         assert_eq!(tokens.len(), expected_kinds.len());
         for (i, token) in tokens.iter().enumerate() {
             assert_eq!(token.kind, expected_kinds[i], "Token {} kind mismatch", i);
-            assert_eq!(token.span.literal, expected_literals[i], "Token {} literal mismatch", i);
+            assert_eq!(interner.lookup(token.span.literal), expected_literals[i], "Token {} literal mismatch", i);
         }
     }
 
     #[test]
     fn test_bitwise_operators() {
-        let mut tokenizer = Tokenizer::new("& | ^ << >>");
+        let mut interner = Interner::new();
+        let mut tokenizer = Tokenizer::new("& | ^ << >>", &mut interner);
         let tokens = tokenizer.tokenize().unwrap();
 
         let expected_kinds = vec![
@@ -119,13 +123,14 @@ mod keywords_and_operators {
         assert_eq!(tokens.len(), expected_kinds.len());
         for (i, token) in tokens.iter().enumerate() {
             assert_eq!(token.kind, expected_kinds[i], "Token {} kind mismatch", i);
-            assert_eq!(token.span.literal, expected_literals[i], "Token {} literal mismatch", i);
+            assert_eq!(interner.lookup(token.span.literal), expected_literals[i], "Token {} literal mismatch", i);
         }
     }
 
     #[test]
     fn test_delimiters() {
-        let mut tokenizer = Tokenizer::new("()[];,.");
+        let mut interner = Interner::new();
+        let mut tokenizer = Tokenizer::new("()[];,.", &mut interner);
         let tokens = tokenizer.tokenize().unwrap();
 
         let expected_kinds = vec![
@@ -147,8 +152,10 @@ mod keywords_and_operators {
 
     #[test]
     fn test_all_compound_assignment_operators() {
+        let mut interner = Interner::new();
         let mut tokenizer = Tokenizer::new(
-            "a = b += c -= d *= e /= f %= g &= h |= i ^= j <<= k >>= l"
+            "a = b += c -= d *= e /= f %= g &= h |= i ^= j <<= k >>= l",
+            &mut interner
         );
         let tokens = tokenizer.tokenize().unwrap();
 
@@ -187,7 +194,8 @@ mod keywords_and_operators {
 
     #[test]
     fn test_bitwise_shift_and_shift_assignment_ambiguity() {
-        let mut tokenizer = Tokenizer::new("a << b >>= c >> d <<= e");
+        let mut interner = Interner::new();
+        let mut tokenizer = Tokenizer::new("a << b >>= c >> d <<= e", &mut interner);
         let tokens = tokenizer.tokenize().unwrap();
 
         let expected_kinds = vec![
@@ -210,78 +218,81 @@ mod keywords_and_operators {
         assert_eq!(tokens.len(), expected_kinds.len());
         for (i, token) in tokens.iter().enumerate() {
             assert_eq!(token.kind, expected_kinds[i], "Token {} kind mismatch", i);
-            assert_eq!(token.span.literal, expected_literals[i], "Token {} literal mismatch", i);
+            assert_eq!(interner.lookup(token.span.literal), expected_literals[i], "Token {} literal mismatch", i);
         }
     }
 
     #[test]
     fn test_identifiers_with_underscores() {
-        let mut tokenizer = Tokenizer::new("_my_var_name WHILE_LOOP");
+        let mut interner = Interner::new();
+        let mut tokenizer = Tokenizer::new("_my_var_name WHILE_LOOP", &mut interner);
         let tokens = tokenizer.tokenize().unwrap();
 
         assert_eq!(tokens.len(), 3);
         assert_eq!(tokens[0].kind, TokenKind::Identifier);
-        assert_eq!(tokens[0].span.literal, "_my_var_name");
+        assert_eq!(interner.lookup(tokens[0].span.literal), "_my_var_name");
         
         assert_eq!(tokens[1].kind, TokenKind::Identifier);
-        assert_eq!(tokens[1].span.literal, "WHILE_LOOP");
+        assert_eq!(interner.lookup(tokens[1].span.literal), "WHILE_LOOP");
     }
 
     #[test]
     fn test_keyword_as_substring_of_identifier() {
-        let mut tokenizer = Tokenizer::new("if32_else i32_var u64_max");
+        let mut interner = Interner::new();
+        let mut tokenizer = Tokenizer::new("if32_else i32_var u64_max", &mut interner);
         let tokens = tokenizer.tokenize().unwrap();
 
         assert_eq!(tokens.len(), 4);
         assert_eq!(tokens[0].kind, TokenKind::Identifier);
-        assert_eq!(tokens[0].span.literal, "if32_else");
+        assert_eq!(interner.lookup(tokens[0].span.literal), "if32_else");
 
         assert_eq!(tokens[1].kind, TokenKind::Identifier);
-        assert_eq!(tokens[1].span.literal, "i32_var");
+        assert_eq!(interner.lookup(tokens[1].span.literal), "i32_var");
         
         assert_eq!(tokens[2].kind, TokenKind::Identifier);
-        assert_eq!(tokens[2].span.literal, "u64_max");
+        assert_eq!(interner.lookup(tokens[2].span.literal), "u64_max");
     }
 
     #[test]
     fn test_float_no_leading_digit_as_dot_and_integer() {
-        let mut tokenizer = Tokenizer::new(".123");
+        let mut interner = Interner::new();
+        let mut tokenizer = Tokenizer::new(".123", &mut interner);
         let tokens = tokenizer.tokenize().unwrap();
         
-        // As noted: parse_number requires a leading digit. 
-        // This parses as Dot -> IntegerLiteral.
         assert_eq!(tokens.len(), 3);
         assert_eq!(tokens[0].kind, TokenKind::Dot);
         assert_eq!(tokens[1].kind, TokenKind::IntegerLiteral);
-        assert_eq!(tokens[1].span.literal, "123");
+        assert_eq!(interner.lookup(tokens[1].span.literal), "123");
     }
 
     #[test]
     fn test_float_with_trailing_zeros() {
-        let mut tokenizer = Tokenizer::new("123.00");
+        let mut interner = Interner::new();
+        let mut tokenizer = Tokenizer::new("123.00", &mut interner);
         let tokens = tokenizer.tokenize().unwrap();
 
         assert_eq!(tokens.len(), 2);
         assert_eq!(tokens[0].kind, TokenKind::FloatLiteral);
-        assert_eq!(tokens[0].span.literal, "123.00");
+        assert_eq!(interner.lookup(tokens[0].span.literal), "123.00");
     }
 
     #[test]
     fn test_invalid_character_after_valid_token() {
-        let mut tokenizer = Tokenizer::new("myVar@");
+        let mut interner = Interner::new();
+        let mut tokenizer = Tokenizer::new("myVar@", &mut interner);
         let result = tokenizer.tokenize();
 
         assert!(result.is_err());
         let err = result.unwrap_err();
 
-        // ET004: Unrecognized character
         assert_eq!(err.code, ErrorCode::ET004);
-        assert_eq!(err.span.literal, "@");
+        assert_eq!(interner.lookup(err.span.literal), "@");
     }
 
     #[test]
     fn test_compound_operator_followed_by_assignment() {
-        let mut tokenizer = Tokenizer::new("a += = b");
+        let mut interner = Interner::new();
+        let mut tokenizer = Tokenizer::new("a += = b", &mut interner);
         let tokens = tokenizer.tokenize().unwrap();
 
         assert_eq!(tokens.len(), 5);
@@ -291,11 +302,10 @@ mod keywords_and_operators {
 
     #[test]
     fn test_bitwise_assignment_separation() {
-        let mut tokenizer = Tokenizer::new("a & = b | = c ^ = d");
+        let mut interner = Interner::new();
+        let mut tokenizer = Tokenizer::new("a & = b | = c ^ = d", &mut interner);
         let tokens = tokenizer.tokenize().unwrap();
         
-        // Expected: Identifier, BitwiseAnd, Assignment, Identifier...
-        // because of the space between & and =
         let expected_kinds = vec![
             TokenKind::Identifier, TokenKind::BitwiseAnd, TokenKind::Assignment,
             TokenKind::Identifier, TokenKind::BitwiseOr, TokenKind::Assignment,
