@@ -38,8 +38,9 @@ my_number = 100;
 bool is_running;
 is_running = true;
 
-// Array access
-u16 item = my_array[0];
+// Arrays
+u16[5] items = {1, 2, 3, 4, 5};
+u16 item = items[0];
 ```
 
 ### 3. If Statements

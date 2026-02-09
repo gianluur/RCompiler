@@ -61,6 +61,9 @@ pub enum ErrorCode {
     EP036,
     EP037,
     EP038,
+    EP039,
+    EP040,
+    EP041,
     ES000,
 }
 
@@ -92,7 +95,7 @@ impl DiagnosticCode for ErrorCode {
             Self::EP001 => "Expected array size inside '[]'",
             Self::EP002 => "Expected ']' after array size",
             Self::EP003 => "Expected an identifier after type in variable declaration",
-            Self::EP004 => "Expected a value after '=' in variable declaration",
+            Self::EP004 => "Expected a value or list initializer after '=' in variable declaration",
             Self::EP005 => "Expected ';' after variable declaration",
             Self::EP006 => "Expected ';' or '=' after name in variable declaration",
             Self::EP007 => "Expected condition after 'if'",
@@ -127,6 +130,10 @@ impl DiagnosticCode for ErrorCode {
             Self::EP036 => "Expected a '(' after type while casting",
             Self::EP037 => "Expected an expression inside cast operation",
             Self::EP038 => "Expected ')' after cast operation",
+            Self::EP039 => "Expected '}' for initializer",
+            Self::EP040 => "Expected expression as an element for initializer",
+            Self::EP041 => "Expected '}' after ',' or another element",
+
             Self::ES000 => "Placeholder for semantic errors",
 
         }

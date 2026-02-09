@@ -4,6 +4,7 @@ use crate::error::*;
 use crate::interner::*;
 
 use core::panic;
+use std::rc::Rc;
 
 pub trait TokenMatcher {
     fn matches(&self, kind: TokenKind) -> bool;
@@ -41,41 +42,41 @@ impl ParserError {
 
     fn get_hint(&self, code: ErrorCode) -> &str {
         match code {
-            ErrorCode::EP000 => "an 'else' or 'elif' must be preceded by an 'if' block",
-            ErrorCode::EP001 => "arrays require a fixed size, e.g., i32[10]",
-            ErrorCode::EP002 => "close the array size declaration with ']'",
-            ErrorCode::EP003 => "provide a name for your variable after the type",
-            ErrorCode::EP004 => "assign a value or expression to the variable",
-            ErrorCode::EP005 => "terminate the variable declaration with a ';'",
-            ErrorCode::EP006 => "complete the variable declaration with an assignment (=) or a semicolon (;)",
-            ErrorCode::EP007 => "add a boolean expression in parentheses or after the 'if' keyword",
-            ErrorCode::EP008 => "start the 'if' body with an opening brace '{'",
-            ErrorCode::EP009 => "start the 'else' body with an opening brace '{'",
-            ErrorCode::EP010 => "add a closing brace '}' to end the code block",
-            ErrorCode::EP011 => "the 'while' loop requires a condition to evaluate",
-            ErrorCode::EP012 => "start the 'while' loop body with an opening brace '{'",
-            ErrorCode::EP013 => "identifiers must be followed by '(' for calls or '=' for assignments",
-            ErrorCode::EP014 => "close the function call arguments with ')'",
-            ErrorCode::EP015 => "provide at least one value or variable as an argument",
-            ErrorCode::EP016 => "finish the argument list or add a closing ')'",
-            ErrorCode::EP017 => "add a semicolon ';' after the function call",
-            ErrorCode::EP018 => "provide a value to be assigned to the variable",
-            ErrorCode::EP019 => "add a semicolon ';' to end the assignment statement",
-            ErrorCode::EP020 => "keywords like 'break' and 'continue' must be followed by a ';'",
-            ErrorCode::EP021 => "provide a value to return or a ';' for void functions",
-            ErrorCode::EP022 => "add a semicolon ';' to end the return statement",
-            ErrorCode::EP023 => "give your function a name, e.g., fn my_function()",
-            ErrorCode::EP024 => "add '(' after the function name to define parameters",
-            ErrorCode::EP025 => "specify a return type (like i32) or leave blank for void",
-            ErrorCode::EP026 => "start the function body with an opening brace '{'",
-            ErrorCode::EP027 => "close the parameter list with ')'",
-            ErrorCode::EP028 => "parameters must have a type, e.g., fn(i32 x)",
-            ErrorCode::EP029 => "provide a name for the parameter after its type",
-            ErrorCode::EP030 => "separate parameters with a comma or close with ')'",
-            ErrorCode::EP031 => "close the grouped expression with ')'",
-            ErrorCode::EP032 => "check your syntax; an expression cannot start with this token",
-            ErrorCode::EP033 => "close the array index access with ']'",
-            ErrorCode::EP034 => "only functions can be called; ensure the identifier is a valid function name",
+            EP000 => "an 'else' or 'elif' must be preceded by an 'if' block",
+            EP001 => "arrays require a fixed size, e.g., i32[10]",
+            EP002 => "close the array size declaration with ']'",
+            EP003 => "provide a name for your variable after the type",
+            EP004 => "assign a value or expression to the variable",
+            EP005 => "terminate the variable declaration with a ';'",
+            EP006 => "complete the variable declaration with an assignment (=) or a semicolon (;)",
+            EP007 => "add a boolean expression in parentheses or after the 'if' keyword",
+            EP008 => "start the 'if' body with an opening brace '{'",
+            EP009 => "start the 'else' body with an opening brace '{'",
+            EP010 => "add a closing brace '}' to end the code block",
+            EP011 => "the 'while' loop requires a condition to evaluate",
+            EP012 => "start the 'while' loop body with an opening brace '{'",
+            EP013 => "identifiers must be followed by '(' for calls or '=' for assignments",
+            EP014 => "close the function call arguments with ')'",
+            EP015 => "provide at least one value or variable as an argument",
+            EP016 => "finish the argument list or add a closing ')'",
+            EP017 => "add a semicolon ';' after the function call",
+            EP018 => "provide a value to be assigned to the variable",
+            EP019 => "add a semicolon ';' to end the assignment statement",
+            EP020 => "keywords like 'break' and 'continue' must be followed by a ';'",
+            EP021 => "provide a value to return or a ';' for void functions",
+            EP022 => "add a semicolon ';' to end the return statement",
+            EP023 => "give your function a name, e.g., fn my_function()",
+            EP024 => "add '(' after the function name to define parameters",
+            EP025 => "specify a return type (like i32) or leave blank for void",
+            EP026 => "start the function body with an opening brace '{'",
+            EP027 => "close the parameter list with ')'",
+            EP028 => "parameters must have a type, e.g., fn(i32 x)",
+            EP029 => "provide a name for the parameter after its type",
+            EP030 => "separate parameters with a comma or close with ')'",
+            EP031 => "close the grouped expression with ')'",
+            EP032 => "check your syntax; an expression cannot start with this token",
+            EP033 => "close the array index access with ']'",
+            EP034 => "only functions can be called; ensure the identifier is a valid function name",
             _ => "",
         }
     }
@@ -101,14 +102,19 @@ pub struct Parser {
     inside_elif: bool,
     inside_while: bool,
     inside_function: bool,
+
+    expected_initialier_list_type: Option<Type>,
 }
 
+use TokenKind::*;
+use ErrorCode::*;
 impl Parser {
+
     pub fn new(tokens: Vec<Token>) -> Self {        
         Self {
             tokens: tokens.into_iter().peekable(),
             peeked: Token{ 
-                kind: TokenKind::Eof, 
+                kind: Eof, 
                 span: TokenSpan { 
                     start: 0, 
                     end: 0, 
@@ -129,6 +135,8 @@ impl Parser {
             inside_elif: false,
             inside_while: false,
             inside_function: false,
+
+            expected_initialier_list_type: None,
         }
     }
 
@@ -136,7 +144,7 @@ impl Parser {
         let mut statements: Vec<Statement> = Vec::new();
 
         while let Some(_) = self.peek() {
-            if self.peeked.kind == TokenKind::Eof {
+            if self.peeked.kind == Eof {
                 break;
             }
             
@@ -153,15 +161,15 @@ impl Parser {
             self.parse_variable()
         }
 
-        else if self.match_peek(TokenKind::Identifier) {
+        else if self.match_peek(Identifier) {
             self.parse_identifier()
         }
 
-        else if self.match_peek(TokenKind::If) {
+        else if self.match_peek(If) {
             self.parse_if_statement()
         }
 
-        else if self.match_peek(TokenKind::While) {
+        else if self.match_peek(While) {
             self.parse_while_statement()
         }
 
@@ -169,47 +177,67 @@ impl Parser {
             self.parse_loop_control()
         }
 
-        else if self.match_peek(TokenKind::Function) {
+        else if self.match_peek(Function) {
             self.parse_function()
         }
 
-        else if self.match_peek(TokenKind::Return) {
+        else if self.match_peek(Return) {
             self.parse_return_statement()
         }
 
         else {
-            if self.match_peek(TokenKind::ElseIf) ||
-               self.match_peek(TokenKind::Else) {
-                return Err(self.error(ErrorCode::EP000));
+            if self.match_peek(ElseIf) ||
+               self.match_peek(Else) {
+                return Err(self.error(EP000));
             }
 
             panic!("Not implemented {}", self.peeked.kind); 
         }
     }
 
-    fn is_variable(&mut self) -> bool {
-        self.match_peek(Type::is) || self.match_peek(TokenKind::Const)
-    }
-
     fn is_assignment() -> impl Fn(TokenKind) -> bool {
         |kind: TokenKind| matches!(kind, 
-            TokenKind::Assignment | 
-            TokenKind::AddAssignment | TokenKind::SubtractAssignment |
-            TokenKind::MultiplyAssignment | TokenKind::DivideAssignment | 
-            TokenKind::ModulusAssignment | TokenKind::BitwiseAndAssignment |
-            TokenKind::BitwiseOrAssignment | TokenKind::BitwiseXorAssignment |
-            TokenKind::BitwiseRShiftAssignment | TokenKind::BitwiseLShiftAssignment
+            Assignment | 
+            AddAssignment | SubtractAssignment |
+            MultiplyAssignment | DivideAssignment | 
+            ModulusAssignment | BitwiseAndAssignment |
+            BitwiseOrAssignment | BitwiseXorAssignment |
+            BitwiseRShiftAssignment | BitwiseLShiftAssignment
         )
     }
 
+    fn is_type() -> impl Fn(TokenKind) -> bool {
+        |kind: TokenKind| matches!(kind,
+            SignedInt8 | SignedInt16 | SignedInt32 | SignedInt64 |
+            UnsignedInt8 | UnsignedInt16 | UnsignedInt32 | UnsignedInt64 |
+            Float32 | Float64 | Character | String | Boolean
+        )
+    }
+
+    fn is_expression() -> impl Fn(TokenKind) -> bool {
+        |kind: TokenKind| matches!(kind, 
+            IntegerLiteral | FloatLiteral | BooleanLiteral |
+            CharLiteral | StringLiteral | Identifier | 
+            Minus | Not |
+            LeftParen | LeftBrace
+        ) || Parser::is_type()(kind)
+    
+    }
+
+    fn is_variable(&mut self) -> bool {
+        self.match_peek(Parser::is_type()) || 
+        self.match_peek(Const)
+    }
+
+
     fn is_loop_control(&mut self) -> bool {
-        return self.match_peek(TokenKind::Break) ||
-               self.match_peek(TokenKind::Continue);
+        self.match_peek(Break) ||
+        self.match_peek(Continue)
     }
 
     fn is_const(&mut self) -> bool {
         let mut is_const: bool = false; 
-        if self.peeked.kind == TokenKind::Const {
+        if self.peeked.kind == Const {
             self.next();
             is_const = true;
         }
@@ -218,40 +246,41 @@ impl Parser {
     }
 
     fn parse_type(&mut self) -> Result<Type, ParserError> {
-        let kind: TokenKind  = self.next().kind; // Consumes the kind like 'i32'
-        let mut array_length: Option<Expression> = None; // Stores the array size
-        let mut is_array: bool = false; // Check if the type is an array type
-
+        let type_: Type = Type::from(self.next().kind); // Consumes the kind like 'i32'
+        
         // Check for a left bracket '['
-        if self.match_peek(TokenKind::LeftBracket) {
+        if self.match_peek(LeftBracket) {
             self.next();
-
+            
             // Check if next character is the start of an expression
-            self.expect_peek(RawExpression::is, ErrorCode::EP001)?;
-            array_length = Some(self.parse_expression(0)?);
+            self.expect_peek(Parser::is_expression(), EP001)?;
+            let length: Expression = self.parse_expression(0)?;
             
             // Chech for a right bracket ']'
-            self.expect_next(TokenKind::RightBracket, ErrorCode::EP002)?;
-            is_array = true;
+            self.expect_next(RightBracket, EP002)?;
+
+            // In the future i want to add vectors
+            // I want to them to have this syntax here: type[]
+            // So no actual length will be needed
+            return Ok(Type::Array { 
+                kind: Box::new(type_), 
+                length: Some(length) 
+            });
         }
 
-        Ok(Type { 
-            kind, 
-            is_array, 
-            array_length 
-        })
+        Ok(type_)
     }
 
     fn parse_variable(&mut self) -> Result<Statement, ParserError> {       
         // Check if the variable is const 
         let is_const: bool = self.is_const();
         let type_: Type = self.parse_type()?;
-        let name: SourceLiteral  = self.expect_next(TokenKind::Identifier, 
-            ErrorCode::EP003)?.span.literal;
+        let name: SourceLiteral  = self.expect_next(Identifier, 
+            EP003)?.span.literal;
         let mut value: Option<Expression> = None;
 
         // This is a declaration without an initial value
-        if self.match_peek(TokenKind::Semicolon) {
+        if self.match_peek(Semicolon) {
             self.next();
 
             Ok(self.statement(
@@ -264,13 +293,17 @@ impl Parser {
             ))
         }
         // This is a declaration with an initial value
-        else if self.match_peek(TokenKind::Assignment)  {
+        else if self.match_peek(Assignment)  {
             self.next();
 
-            self.expect_peek(RawExpression::is, ErrorCode::EP004)?;
+            if let Type::Array { kind, .. } = &type_ {
+                self.expected_initialier_list_type = Some(*kind.clone());
+            }
+
+            self.expect_peek(Parser::is_expression(), EP004)?;
             value = Some(self.parse_expression(0)?);
 
-            self.expect_next(TokenKind::Semicolon, ErrorCode::EP005)?;
+            self.expect_next(Semicolon, EP005)?;
 
             Ok(self.statement(
                 RawStatement::VariableDeclaration { 
@@ -283,7 +316,7 @@ impl Parser {
         }
         // The user inserted some unexpected token after the type and name
         else {
-            Err(self.error(ErrorCode::EP006))
+            Err(self.error(EP006))
         }
     }
 
@@ -299,25 +332,25 @@ impl Parser {
         self.next(); // Consumes the 'if' keyword or 'elif' keyword
 
         // Consumes the condition
-        self.expect_peek(RawExpression::is, ErrorCode::EP007)?;
+        self.expect_peek(Parser::is_expression(), EP007)?;
         condition = self.parse_expression(0)?;
         
         // Consumes the body
-        self.expect_peek(TokenKind::LeftBrace, ErrorCode::EP008)?;
+        self.expect_peek(LeftBrace, EP008)?;
         body = self.parse_body()?;
 
         // If we are not inside an elif statement we can start parsing all the
         // other 'elif' and 'else' statements
         if !self.inside_elif {
             while let Some(_) = self.peek() {
-                if self.peeked.kind == TokenKind::ElseIf {
+                if self.peeked.kind == ElseIf {
                     self.inside_elif = true;
                     elses.push(ElseBranch::ElseIf(self.parse_if_statement()?));
                     self.inside_elif = false;
                 }
-                else if self.peeked.kind == TokenKind::Else {
+                else if self.peeked.kind == Else {
                     self.next(); // Parses the 'else' keyword
-                    self.expect_peek(TokenKind::LeftBrace, ErrorCode::EP009)?;
+                    self.expect_peek(LeftBrace, EP009)?;
 
                     elses.push(ElseBranch::Else(self.parse_body()?));
                 }
@@ -341,12 +374,12 @@ impl Parser {
         // Consumes all the various statements that are inside the body
         while let Some(_) = self.peek() {
             // This here means an incomplete body, because it's missing the '}'
-            if self.peeked.kind == TokenKind::Eof {
-                return Err(self.error(ErrorCode::EP010));
+            if self.peeked.kind == Eof {
+                return Err(self.error(EP010));
             }
 
             // Found the '}' we can quit after we consume it
-            if self.peeked.kind == TokenKind::RightBrace {
+            if self.peeked.kind == RightBrace {
                 self.next(); // Consumes the '}'
                 break;
             }
@@ -367,11 +400,11 @@ impl Parser {
         let body: Body;
 
         // Consumes the condtion
-        self.expect_peek(RawExpression::is, ErrorCode::EP011)?;
+        self.expect_peek(Parser::is_expression(), EP011)?;
         condition = self.parse_expression(0)?;
         
         // Consumes the body
-        self.expect_peek(TokenKind::LeftBrace, ErrorCode::EP012)?;
+        self.expect_peek(LeftBrace, EP012)?;
         body = self.parse_body()?;
 
         self.inside_while = false;
@@ -393,12 +426,12 @@ impl Parser {
             self.parse_variable_assignment(identifier)
         }
         // If'the next token is a '(' then it's a function call
-        else if self.match_peek(TokenKind::LeftParen){
+        else if self.match_peek(LeftParen){
             self.parse_function_call(identifier)
         }
         // The user wrote something that has no sense after the identifier
         else {
-            Err(self.error(ErrorCode::EP013))
+            Err(self.error(EP013))
         }
     }
 
@@ -413,7 +446,7 @@ impl Parser {
         let arguments: Vec<Expression> = self.parse_arguments()?;
 
         // Consumes the ';'
-        self.expect_next(TokenKind::Semicolon, ErrorCode::EP017)?;
+        self.expect_next(Semicolon, EP017)?;
 
         Ok(self.statement(RawStatement::FunctionCall { 
             name: name.span.literal, 
@@ -427,30 +460,30 @@ impl Parser {
         // Loop to get all the arguments
         while let Some(_) = self.peek() {
             // Here means incomplete arguments, because it abruptly ends
-            if self.peeked.kind == TokenKind::Eof {
-                return Err(self.error(ErrorCode::EP014));
+            if self.peeked.kind == Eof {
+                return Err(self.error(EP014));
             }
 
             // Found the ')' we can safely quit
-            if self.peeked.kind == TokenKind::RightParen {
+            if self.peeked.kind == RightParen {
                 self.next();
                 break;
             }
 
             // We check for an expression because argument are just either
             // variables, function calls, or plain math expressions
-            self.expect_peek(RawExpression::is, ErrorCode::EP015)?;
+            self.expect_peek(Parser::is_expression(), EP015)?;
             arguments.push(self.parse_expression(0)?);
 
             // Now after we got the expression we expect a comma or a right paren
             // The check for the right paren is at the start so no point in repeating code
-            if self.match_peek(TokenKind::Comma){
+            if self.match_peek(Comma){
                 self.next();
 
                 // We correctly found the comma, but if the next token is a
                 // right paren it means the user didn't end the arguments properly
-                if self.match_peek(TokenKind::RightParen) {
-                    return Err(self.error(ErrorCode::EP016));
+                if self.match_peek(RightParen) {
+                    return Err(self.error(EP016));
                 }
             }            
         }
@@ -462,11 +495,11 @@ impl Parser {
         let operator: TokenKind = self.next().kind; // Consumes the '=', '+=' and similar
         
         // Consumes the expression to assing to the variable
-        self.expect_peek(RawExpression::is, ErrorCode::EP018)?;
+        self.expect_peek(Parser::is_expression(), EP018)?;
         let value: Expression = self.parse_expression(0)?;
         
         // Consumes the ';'
-        self.expect_next(TokenKind::Semicolon, ErrorCode::EP019)?;
+        self.expect_next(Semicolon, EP019)?;
         
         Ok(self.statement(
             RawStatement::VariableAssignment {
@@ -480,7 +513,7 @@ impl Parser {
         let keyword: Token = self.next(); // Parses either 'break' or 'continue'
 
         // Consumes the ';'
-        self.expect_next(TokenKind::Semicolon, ErrorCode::EP020)?;
+        self.expect_next(Semicolon, EP020)?;
 
         Ok(self.statement(
             RawStatement::LoopControl(keyword.span.literal)
@@ -493,17 +526,17 @@ impl Parser {
         let mut expression: Option<Expression> = None;
 
         // This parses a return with no value 'return;'
-        if self.match_peek(TokenKind::Semicolon) {
+        if self.match_peek(Semicolon) {
             self.next();
         }
         // This parses a return with a value
-        else if self.match_peek(RawExpression::is) {
+        else if self.match_peek(Parser::is_expression()) {
             expression = Some(self.parse_expression(0)?);
-            self.expect_next(TokenKind::Semicolon, ErrorCode::EP022)?;
+            self.expect_next(Semicolon, EP022)?;
         }
         // The user has put something invalid after the return keyword
         else {
-            return Err(self.error(ErrorCode::EP021));
+            return Err(self.error(EP021));
         }
 
         Ok(self.statement(
@@ -520,29 +553,29 @@ impl Parser {
         self.next(); // Consumes the 'fn' keyword
         
         // Consumes the name
-        let name: SourceLiteral = self.expect_next(TokenKind::Identifier, 
-                    ErrorCode::EP023)?.span.literal;
+        let name: SourceLiteral = self.expect_next(Identifier, 
+                    EP023)?.span.literal;
         
         // Consumes the parameters
-        self.expect_next(TokenKind::LeftParen, ErrorCode::EP024)?;
+        self.expect_next(LeftParen, EP024)?;
         let parameters: Vec<Parameter> = self.parse_parameters()?;
         
         // This parses the type
-        let mut type_: Type = Type { kind: TokenKind::Null, is_array: false, array_length: None };
+        let mut type_: Type = Type::null();
         // If the next token isn't a left brace then it's a type
-        if !self.match_peek(TokenKind::LeftBrace){
+        if !self.match_peek(LeftBrace){
             // Now if the token is actually type then parse it
-            if self.match_peek(Type::is) {
+            if self.match_peek(Parser::is_type()) {
                 type_ = self.parse_type()?;
             }
             // Otherwise it's an error
             else {
-                return Err(self.error(ErrorCode::EP025));
+                return Err(self.error(EP025));
             }
         }
 
         // Consumes the body
-        self.expect_peek(TokenKind::LeftBrace, ErrorCode::EP026)?;
+        self.expect_peek(LeftBrace, EP026)?;
         let body: Body = self.parse_body()?;
 
         self.inside_function = false;
@@ -562,12 +595,12 @@ impl Parser {
         // Loops to find all the parameters
         while let Some(_) = self.peek() {
             // This means incomplete parameters, because it's missing the ')'
-            if self.peeked.kind == TokenKind::Eof {
-                return Err(self.error(ErrorCode::EP027));
+            if self.peeked.kind == Eof {
+                return Err(self.error(EP027));
             }
 
             // Found the ')' we can quit
-            if self.peeked.kind == TokenKind::RightParen {
+            if self.peeked.kind == RightParen {
                 self.next();
                 break;
             }
@@ -575,12 +608,12 @@ impl Parser {
             let is_const: bool = self.is_const();
 
             // Consumes the parameter type
-            self.expect_peek(Type::is, ErrorCode::EP028)?;
+            self.expect_peek(Parser::is_type(), EP028)?;
             let type_: Type = self.parse_type()?;
 
             // Consumes the name
-            let name: SourceLiteral = self.expect_next(TokenKind::Identifier, 
-                        ErrorCode::EP029)?.span.literal;
+            let name: SourceLiteral = self.expect_next(Identifier, 
+                        EP029)?.span.literal;
 
             parameters.push(Parameter {
                 is_const,
@@ -591,10 +624,10 @@ impl Parser {
             // Same thing as for arguments, if the next token is a comma
             // we consume it and check if the next token is a type otherwise
             // it's an error
-            if self.match_peek(TokenKind::Comma){
+            if self.match_peek(Comma){
                 self.next();
-                if !self.match_peek(Type::is) {
-                    return Err(self.error(ErrorCode::EP030));
+                if !self.match_peek(Parser::is_type()) {
+                    return Err(self.error(EP030));
                 }
             }            
         }
@@ -611,8 +644,8 @@ impl Parser {
         // This is the first part of the expression 
         // So this is either a literal, variable, parenthesis or a unary operator
         let mut left: Expression = match token.kind {
-            TokenKind::IntegerLiteral | TokenKind::FloatLiteral | TokenKind::BooleanLiteral |
-            TokenKind::CharLiteral    | TokenKind::StringLiteral => {
+            IntegerLiteral | FloatLiteral | BooleanLiteral |
+            CharLiteral    | StringLiteral => {
                 self.expression(expression_start, 
                     RawExpression::Literal { 
                         kind: token.kind, 
@@ -621,25 +654,25 @@ impl Parser {
                 )
             },
 
-            TokenKind::Identifier => {
+            Identifier => {
                 self.expression(expression_start, 
                     RawExpression::Variable(token.span.literal)
                 )
             },
 
-            kind if Type::is(kind) => {
-                if kind == TokenKind::Const {
-                    return Err(self.error(ErrorCode::EP035));
+            kind if Parser::is_type()(kind) => {
+                if kind == Const {
+                    return Err(self.error(EP035));
                 }
 
                 // 1. Expect the opening parenthesis '('
-                self.expect_next(TokenKind::LeftParen, ErrorCode::EP036)?;
+                self.expect_next(LeftParen, EP036)?;
 
-                self.expect_peek(RawExpression::is, ErrorCode::EP037)?;
+                self.expect_peek(Parser::is_expression(), EP037)?;
                 let expression: Expression = self.parse_expression(0)?;
                 
                 // 3. Expect the closing parenthesis ')'
-                self.expect_next(TokenKind::RightParen, ErrorCode::EP038)?;
+                self.expect_next(RightParen, EP038)?;
 
                 self.expression(expression_start, RawExpression::Cast {
                     kind,
@@ -647,7 +680,7 @@ impl Parser {
                 })
             },
             
-            TokenKind::Minus | TokenKind::Not => {
+            Minus | Not => {
                 // Unary Op: recursive call with high binding power
                 let operand: Expression = self.parse_expression(4)?; 
                 self.expression(expression_start, 
@@ -658,24 +691,32 @@ impl Parser {
                 )
             },
             
-            TokenKind::LeftParen => {
+            LeftParen => {
                 // Grouping: reset BP to 0 to parse inside the parens
                 let expression: Expression = self.parse_expression(0)?;
-                self.expect_next(TokenKind::RightParen, ErrorCode::EP031)?;
+                self.expect_next(RightParen, EP031)?;
                 expression
             }
 
-            _ => return Err(self.error(ErrorCode::EP032)),
+            LeftBrace => {
+                let list: Vec<Expression> = self.parse_list_initializer()?;
+                self.expression(expression_start, RawExpression::InitializerList {
+                    list,
+                    expected_type: self.expected_initialier_list_type.clone(),
+                })
+            }
+
+            _ => return Err(self.error(EP032)),
         };
 
         // This is the operator and the right part of the expression
         loop {
             let operator: Token = match self.peek() {
-                    Some(t) if t.kind != TokenKind::Eof => t,
+                    Some(t) if t.kind != Eof => t,
                     _ => break,
                 };
 
-                let (l_bp, r_bp) = RawExpression::get_binding_power(operator.kind);
+                let (l_bp, r_bp) = self.get_binding_power(operator.kind);
                 
                 // If it's not an operator (bp 0) or isn't strong enough, stop immediately.
                 if l_bp == 0 || l_bp < min_bp {
@@ -686,9 +727,9 @@ impl Parser {
 
             match operator.kind {
                 // Standard Math
-                TokenKind::Plus | TokenKind::Minus | 
-                TokenKind::Multiplication | TokenKind::Division |
-                TokenKind::Modulus => {
+                Plus | Minus | 
+                Multiplication | Division |
+                Modulus => {
                     let right: Expression = self.parse_expression(r_bp)?;
                     left = self.expression(expression_start, 
                             RawExpression::Binary {
@@ -700,9 +741,9 @@ impl Parser {
                 }
 
                 // Array Access: name[index]
-                TokenKind::LeftBracket => {
+                LeftBracket => {
                     let index: Expression = self.parse_expression(0)?; // Inner expr
-                    self.expect_next(TokenKind::RightBracket, ErrorCode::EP033)?;
+                    self.expect_next(RightBracket, EP033)?;
                     left = self.expression(expression_start, RawExpression::ArrayAccess {
                         name: left,
                         index,
@@ -710,13 +751,13 @@ impl Parser {
                 }
 
                 // Function Call: name(arg1, arg2)
-                TokenKind::LeftParen => {
+                LeftParen => {
                     // Here 'left' is the function name (Expression::Variable)
                     let name: SourceLiteral = match left.node {
                         RawExpression::Variable(n) => n,
             
                         // The error here means that it's trying to call a non-function
-                        _ => return Err(self.error(ErrorCode::EP034)),
+                        _ => return Err(self.error(EP034)),
                     };
 
                     let arguments: Vec<Expression> = self.parse_arguments()?;
@@ -735,8 +776,74 @@ impl Parser {
         Ok(left)
     }
 
+    pub fn get_binding_power(&self, kind: TokenKind) -> (u8, u8) {
+        match kind {
+            // Logical OR/AND (Lowest)
+            TokenKind::Or | TokenKind::And => (5, 6),
+
+            // Equality
+            TokenKind::Equal | TokenKind::NotEqual => (10, 11),
+
+            // Relational
+            TokenKind::LessThan | TokenKind::LessThanOrEqual |
+            TokenKind::GreaterThan | TokenKind::GreaterThanOrEqual => (20, 21),
+
+            // Shifts
+            TokenKind::BitwiseLShift | TokenKind::BitwiseRShift => (30, 31),
+
+            // Additive
+            TokenKind::Plus | TokenKind::Minus => (40, 41),
+
+            // Multiplicative
+            TokenKind::Multiplication | TokenKind::Division | TokenKind::Modulus => (50, 51),
+
+            // Highest: Calls and Indexing
+            TokenKind::LeftParen | TokenKind::LeftBracket => (80, 81),
+
+            _ => (0, 0),
+        }
+    }
+
+
+    fn parse_list_initializer(&mut self) -> Result<Vec<Expression>, ParserError> {
+        let mut elements: Vec<Expression> = Vec::new();
+        
+        // Loop to get all the elements
+        while let Some(_) = self.peek() {
+            // Here means incomplete elements, because it abruptly ends
+            if self.peeked.kind == Eof {
+                return Err(self.error(EP039));
+            }
+
+            // Found the '}' we can safely quit
+            if self.peeked.kind == RightBrace {
+                self.next();
+                break;
+            }
+
+            // We check for an expression because elements are just either
+            // variables, function calls, or plain math expressions
+            self.expect_peek(Parser::is_expression(), EP040)?;
+            elements.push(self.parse_expression(0)?);
+
+            // Now after we got the expression we expect a comma or a right curly brace
+            // The check for the right curly brace is at the start so no point in repeating code
+            if self.match_peek(Comma){
+                self.next();
+
+                // We correctly found the comma, but if the next token is a
+                // right curly brace it means the user didn't end the arguments properly
+                if self.match_peek(RightBrace) {
+                    return Err(self.error(EP041));
+                }
+            }            
+        }
+
+        Ok(elements)
+    }
+
     fn statement(&mut self, node: RawStatement) -> Statement {
-        Box::new(Spanned { 
+        Rc::new(Spanned { 
             node, 
             span: StatementSpan { 
                 start: self.statement_start, 
@@ -746,7 +853,7 @@ impl Parser {
     }
 
     fn expression(&mut self, expression_start: usize, node: RawExpression) -> Expression {
-        Box::new(Spanned { 
+        Rc::new(Spanned { 
             node, 
             span: StatementSpan { 
                 start: expression_start, 

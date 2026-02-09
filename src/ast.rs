@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use crate::tokenizer::TokenKind;
 use crate::interner::SourceLiteral;
 
@@ -46,44 +48,10 @@ pub enum RawExpression {
     Cast {
         kind: TokenKind,
         expression: Expression,
-    }
-}
-
-impl RawExpression {
-    pub fn is(kind: TokenKind) -> bool {
-        use TokenKind::*;
-        matches!(kind,
-            IntegerLiteral | FloatLiteral | BooleanLiteral |
-            CharLiteral | StringLiteral | LeftParen | Identifier | Minus | Not
-        ) || Type::is(kind)
-    }
-
-    pub fn get_binding_power(kind: TokenKind) -> (u8, u8) {
-        match kind {
-            // Logical OR/AND (Lowest)
-            TokenKind::Or | TokenKind::And => (5, 6),
-
-            // Equality
-            TokenKind::Equal | TokenKind::NotEqual => (10, 11),
-
-            // Relational
-            TokenKind::LessThan | TokenKind::LessThanOrEqual |
-            TokenKind::GreaterThan | TokenKind::GreaterThanOrEqual => (20, 21),
-
-            // Shifts
-            TokenKind::BitwiseLShift | TokenKind::BitwiseRShift => (30, 31),
-
-            // Additive
-            TokenKind::Plus | TokenKind::Minus => (40, 41),
-
-            // Multiplicative
-            TokenKind::Multiplication | TokenKind::Division | TokenKind::Modulus => (50, 51),
-
-            // Highest: Calls and Indexing
-            TokenKind::LeftParen | TokenKind::LeftBracket => (80, 81),
-
-            _ => (0, 0),
-        }
+    },
+    InitializerList {
+        list: Vec<Expression>,
+        expected_type: Option<Type>,
     }
 }
 
@@ -129,155 +97,158 @@ pub enum ElseBranch {
     Else(Body),
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct Type {
-    pub kind: TokenKind,
-    pub is_array: bool,
-    pub array_length: Option<Expression>,
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum PrimitiveType {
+    I8, I16, I32, I64,
+    U8, U16, U32, U64,
+    F32, F64,
+    Char, Str, Bool, Null,
 }
 
-impl Type {    
-    pub fn is(kind: TokenKind) -> bool {
-        use TokenKind::*;
-        matches!(kind, 
-            SignedInt8 | SignedInt16 | SignedInt32 | SignedInt64 |
-            UnsignedInt8 | UnsignedInt16 | UnsignedInt32 | UnsignedInt64 |
-            Float32 | Float64 | Character | String | Boolean | Const
-        )
-    }
 
-    pub fn is_integer(type_: &Type) -> bool {
-        use TokenKind::*;
-        matches!(type_.kind, 
-            SignedInt8 | SignedInt16 | SignedInt32 | SignedInt64 |
-            UnsignedInt8 | UnsignedInt16 | UnsignedInt32 | UnsignedInt64
-        )
-    }
-
-    pub fn is_float(type_: &Type) -> bool {
-        use TokenKind::*;
-        matches!(type_.kind, 
-            Float32 | Float64
-        )
-    }
-
-    pub fn is_numeric(type_: &Type) -> bool {
-        use TokenKind::*;
-        matches!(type_.kind, 
-            SignedInt8 | SignedInt16 | SignedInt32 | SignedInt64 |
-            UnsignedInt8 | UnsignedInt16 | UnsignedInt32 | UnsignedInt64 |
-            Float32 | Float64
-        )
-    }
-
-    pub fn is_boolean(type_: &Type) -> bool {
-        use TokenKind::*;
-        matches!(type_.kind, 
-            Boolean
-        )
-    }
-
-    pub fn is_character(type_: &Type) -> bool {
-        use TokenKind::*;
-        matches!(type_.kind, 
-            Character
-        )
-    }
-
-    pub fn is_string(type_: &Type) -> bool {
-        use TokenKind::*;
-        matches!(type_.kind, 
-            String
-        )
-    }
-
-    pub fn is_null(type_: &Type) -> bool {
-        use TokenKind::*;
-        matches!(type_.kind, 
-            Null
-        )
-    }
-
-    fn rank(&self) -> u8 {
-        use TokenKind::*;
-        match self.kind {
-            SignedInt8  | UnsignedInt8  => 1,
-            SignedInt16 | UnsignedInt16 => 2,
-            SignedInt32 | UnsignedInt32 => 3,
-            SignedInt64 | UnsignedInt64 => 4,
-            Float32 => 5,
-            Float64 => 6,
-            _ => 0, // Non-numeric or complex types
+impl PrimitiveType {
+    pub fn from(kind: TokenKind) -> PrimitiveType {
+        match kind {
+            TokenKind::SignedInt8 => PrimitiveType::I8,
+            TokenKind::SignedInt16 => PrimitiveType::I16,
+            TokenKind::SignedInt32 => PrimitiveType::I32,
+            TokenKind::SignedInt64 => PrimitiveType::I64,
+            TokenKind::UnsignedInt8 => PrimitiveType::U8,
+            TokenKind::UnsignedInt16 => PrimitiveType::U16,
+            TokenKind::UnsignedInt32 => PrimitiveType::U32,
+            TokenKind::UnsignedInt64 => PrimitiveType::U64,
+            TokenKind::Float32 => PrimitiveType::F32,
+            TokenKind::Float64 => PrimitiveType::F64,
+            TokenKind::Character => PrimitiveType::Char,
+            TokenKind::String => PrimitiveType::Str,
+            TokenKind::Boolean => PrimitiveType::Bool,
+            _ => unreachable!(),
         }
     }
 
-    pub fn are_equal(left: &Type, right: &Type) -> bool {
-        if left.kind == right.kind && left.is_array == right.is_array {
-            return true;
-        }
-        return false;
-
-        // TODO Add other checks
+    pub fn is_integer(&self) -> bool {
+        use PrimitiveType::*;
+        matches!(self, I8 | I16 | I32 | I64 | U8 | U16 | U32 | U64)
     }
-
-    pub fn integer() -> Type {
-        Type {
-            kind: TokenKind::SignedInt32,
-            is_array: false,
-            array_length: None,
-        }
-    }
-
-    pub fn float() -> Type {
-        Type {
-            kind: TokenKind::Float32,
-            is_array: false,
-            array_length: None,
-        }
-    }
-
-    pub fn boolean() -> Type {
-        Type {
-            kind: TokenKind::Boolean,
-            is_array: false,
-            array_length: None,
-        }
-    }
-
-    pub fn character() -> Type {
-        Type {
-            kind: TokenKind::Character,
-            is_array: false,
-            array_length: None,
-        }
-    }
-
-    pub fn string() -> Type {
-        Type {
-            kind: TokenKind::String,
-            is_array: false,
-            array_length: None,
-        }
-    }
-
-    pub fn null() -> Type {
-        Type {
-            kind: TokenKind::Null,
-            is_array: false,
-            array_length: None,
-        }
-    }
-
-    pub fn from(kind: TokenKind) -> Type {
-        Type {
-            kind,
-            is_array: false,
-            array_length: None,
-        }
-    }
-
     
+    pub fn is_float(&self) -> bool {
+        use PrimitiveType::*;
+        matches!(self, F32 | F64)
+    }
+    
+    pub fn numeric_rank(&self) -> u8 {
+        use PrimitiveType::*;
+        match self {
+            I8  | U8  => 1,
+            I16 | U16 => 2,
+            I32 | U32 => 3,
+            I64 | U64 => 4,
+            F32       => 5,
+            F64       => 6,
+            _         => 0,
+        }
+    }
 }
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Type {
+    Primitive(PrimitiveType),
+    Array {
+        kind: Box<Type>,
+        length: Option<Expression>,
+    },
+}
+
+impl Type {
+    pub fn from(kind: TokenKind) -> Type {
+        Type::Primitive(PrimitiveType::from(kind))
+    }
+
+    pub fn is_integer(&self) -> bool {
+        match self {
+            Type::Primitive(p) => p.is_integer(),
+            _ => false,
+        }
+    }
+
+    pub fn is_float(&self) -> bool {
+        match self {
+            Type::Primitive(p) => p.is_float(),
+            _ => false,
+        }
+    }
+
+    pub fn is_numeric(&self) -> bool {
+        match self {
+            Type::Primitive(p) => p.is_integer() || p.is_float(),
+            _ => false,
+        }
+    }
+
+    pub fn is_boolean(&self) -> bool {
+        matches!(self, Type::Primitive(PrimitiveType::Bool))
+    }
+
+    pub fn is_null(&self) -> bool {
+        matches!(self, Type::Primitive(PrimitiveType::Null))
+    }
+
+    pub fn is_array(&self) -> bool {
+        matches!(self, Type::Array { .. })
+    }
+
+    pub fn i32() -> Self { 
+        Type::Primitive(PrimitiveType::I32) 
+    }
+
+    pub fn f32() -> Self {
+        Type::Primitive(PrimitiveType::F32) 
+    }
+    
+    pub fn bool() -> Self {
+        Type::Primitive(PrimitiveType::Bool) 
+    }
+
+    pub fn char() -> Self {
+        Type::Primitive(PrimitiveType::Char)
+    }
+
+    pub fn string() -> Self { 
+        Type::Primitive(PrimitiveType::Str) 
+    }
+
+    pub fn null() -> Self {
+        Type::Primitive(PrimitiveType::Null)
+    }
+
+    pub fn array(kind: Type, length: Option<Expression>) -> Self {
+        Type::Array { 
+            kind: Box::new(kind), 
+            length 
+        }
+    }
+
+    pub fn are_equal(a: &Type, b: &Type) -> bool {
+        match (a, b) {
+            (Type::Primitive(a_p), Type::Primitive(b_p)) => a_p == b_p,
+            (Type::Array { kind: a_k, .. }, Type::Array { kind: b_k, .. }) => {
+                // Recursively check if the types inside the arrays are the same
+                Type::are_equal(a_k, b_k)
+            },
+            _ => false,
+        }
+    }
+
+    /// Returns the rank for numeric coercion (e.g., i32 + f32 -> f32)
+    pub fn rank(&self) -> u8 {
+        match self {
+            Type::Primitive(p) => p.numeric_rank(),
+            _ => 0,
+        }
+    }
+}
+
+
 
 #[derive(Debug, Clone)]
 pub struct Parameter {
@@ -291,5 +262,5 @@ pub struct Body {
     pub statements: Vec<Statement>,
 }
 
-pub type Expression = Box<Spanned<RawExpression>>;
-pub type Statement = Box<Spanned<RawStatement>>;
+pub type Expression = Rc<Spanned<RawExpression>>;
+pub type Statement = Rc<Spanned<RawStatement>>;
