@@ -1,0 +1,271 @@
+use std::fs::File;
+use std::io::{self, BufRead, BufReader};
+
+trait DiagnosticCode
+where
+    Self: std::fmt::Debug,
+{
+    fn message(&self) -> &'static str;
+    fn code_str(&self) -> String {
+        format!("{:?}", self)
+    }
+}
+
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum ErrorCode {
+    ET001,
+    ET002,
+    ET003,
+    ET004,
+    ET005,
+    ET006,
+    ET007,
+    ET008,
+    ET009,
+    ET010,
+    ET011,
+    ET012,
+    EP000,
+    EP001,
+    EP002,
+    EP003,
+    EP004,
+    EP005,
+    EP006,
+    EP007,
+    EP008,
+    EP009,
+    EP010,
+    EP011,
+    EP012,
+    EP013,
+    EP014,
+    EP015,
+    EP016,
+    EP017,
+    EP018,
+    EP019,
+    EP020,
+    EP021,
+    EP022,
+    EP023,
+    EP024,
+    EP025,
+    EP026,
+    EP027,
+    EP028,
+    EP029,
+    EP030,
+    EP031,
+    EP032,
+    EP033,
+    EP034,
+    EP035,
+    EP036,
+    EP037,
+    EP038,
+    EP039,
+    EP040,
+    EP041,
+    ES000,
+    ES001,
+    ES002,
+    ES003,
+    ES004,
+    ES005,
+    ES006,
+    ES007,
+    ES008,
+    ES009,
+    ES010,
+    ES011,
+    ES012,
+    ES013,
+    ES014,
+    ES015,
+}
+
+// #[derive(Debug, PartialEq, Clone, Copy)]
+// pub enum WarningCode {
+//     WT000
+// }
+
+impl DiagnosticCode for ErrorCode {
+    fn message(&self) -> &'static str {
+        match self {
+            // === Tokenizer Errors === //
+            Self::ET001 => "Numeric literal contains multiple decimal points",
+            Self::ET002 => "Identifiers cannot immediately follow a numeric literal",
+            Self::ET003 => "Numeric literal cannot end with a trailing decimal point",
+            Self::ET004 => "Unexpected or unrecognized character in source",
+            Self::ET005 => "Character literal must contain exactly one character",
+            Self::ET006 => "Character literal cannot be empty",
+            Self::ET007 => "Unterminated character literal: missing closing single quote",
+            Self::ET008 => "Unterminated character literal: closing quote is being escaped",
+            Self::ET009 => "Unknown or invalid escape sequence",
+            Self::ET010 => "Invalid octal character escape",
+            Self::ET011 => "Invalid hexadecimal character escape",
+            Self::ET012 => "Unterminated string literal: missing closing double quote",
+
+            // === Parser Errors === //
+            Self::EP000 => "Expected 'if' before 'else' or 'elif'",
+            Self::EP001 => "Expected array size inside '[]'",
+            Self::EP002 => "Expected ']' after array size",
+            Self::EP003 => "Expected an identifier after type in variable declaration",
+            Self::EP004 => "Expected a value or list initializer after '=' in variable declaration",
+            Self::EP005 => "Expected ';' after variable declaration",
+            Self::EP006 => "Expected ';' or '=' after name in variable declaration",
+            Self::EP007 => "Expected condition after 'if'",
+            Self::EP008 => "Expected '{' after 'if' condition",
+            Self::EP009 => "Expected '{' after 'else'",
+            Self::EP010 => "Expected '}' to close body",
+            Self::EP011 => "Expected condition after 'while'",
+            Self::EP012 => "Expected '{' after 'while' condition",
+            Self::EP013 => "Expected '(' or assignment operator after identifier",
+            Self::EP014 => "Expected ')' for function call",
+            Self::EP015 => "Expected expression as argument for function call",
+            Self::EP016 => "Expected ')' after ',' or another argument",
+            Self::EP017 => "Expected ';' after function call",
+            Self::EP018 => "Expected expression after assignment operator",
+            Self::EP019 => "Expected ';' after assignment",
+            Self::EP020 => "Expected ';' after loop control keyword",
+            Self::EP021 => "Expected expression or ';' after 'return'",
+            Self::EP022 => "Expected ';' after return statement",
+            Self::EP023 => "Expected name after 'fn'",
+            Self::EP024 => "Expected '(' after function name",
+            Self::EP025 => "Expected valid return type for function",
+            Self::EP026 => "Expected '{' for function body",
+            Self::EP027 => "Expected ')' for function parameters",
+            Self::EP028 => "Expected type for parameter",
+            Self::EP029 => "Expected name after parameter type",
+            Self::EP030 => "Expected another parameter or ')'",
+            Self::EP031 => "Expected ')' after expression",
+            Self::EP032 => "Expected identifier, literal, '(', '-', or '!'",
+            Self::EP033 => "Expected ']' for array access",
+            Self::EP034 => "Expected a valid function name before '('",
+            Self::EP035 => "Expected a non-const type for cast expression",
+            Self::EP036 => "Expected a '(' after type while casting",
+            Self::EP037 => "Expected an expression inside cast operation",
+            Self::EP038 => "Expected ')' after cast operation",
+            Self::EP039 => "Expected '}' for initializer",
+            Self::EP040 => "Expected expression as an element for initializer",
+            Self::EP041 => "Expected '}' after ',' or another element",
+
+            Self::ES000 => "Placeholder for semantic errors",
+            Self::ES001 => "A symbol with the same name has already been declared",
+            Self::ES002 => "The variable type doesn't match the type of the associated value",
+            Self::ES003 => "A const variable can't be declared with no value",
+
+            _ => "Fuck i forgot some errors",
+        }
+    }
+}
+
+// impl DiagnosticCode for WarningCode {
+//     fn message(&self) -> &'static str {
+//         match self {
+//             WarningCode::WT000 => "Currently there are no warning"
+//         }
+//     }
+// }
+
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum DiagnosticKind {
+    Error(ErrorCode),
+    // Warning(WarningCode),
+}
+
+impl DiagnosticKind {
+    pub fn kind_to_str(&self) -> &'static str {
+        match self {
+            Self::Error(_) => "error",
+            // Self::Warning(_) => "warning"
+        }
+    }
+
+    pub fn code_to_string(&self) -> String {
+        match self {
+            Self::Error(code) => code.code_str(),
+            // Self::Warning(code) => code.code_str(),
+        }
+    }
+
+    pub fn message(&self) -> &'static str {
+        match self {
+            Self::Error(code) => code.message(),
+            //Self::Warning(code) => code.message(),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub struct DiagnosticInfo {
+    pub filename: String,
+    pub line: usize,
+    pub column: usize,
+}
+
+pub struct Diagnostic {
+    pub kind: DiagnosticKind,
+    pub info: DiagnosticInfo,
+    pub hint: Option<&'static str>,
+}
+
+impl Diagnostic {
+    pub fn new(kind: DiagnosticKind, info: DiagnosticInfo, hint: Option<&'static str>) -> Self {
+        Self { kind, info, hint }
+    }
+
+    pub fn print(&self) {
+        let red: &str = "\x1b[31;1m";
+        let cyan: &str = "\x1b[36m";
+        let yellow: &str = "\x1b[33m";
+        let bold: &str = "\x1b[1m";
+        let reset: &str = "\x1b[0m";
+
+        let kind: &str = self.kind.kind_to_str();
+        let code: String = self.kind.code_to_string();
+        let message: &str = self.kind.message();
+
+        println!("{red}{kind}[{code}]{reset}: {bold}{message}{reset}");
+
+        println!(
+            "{cyan}  -->{reset} {}:{}:{}",
+            self.info.filename, self.info.line, self.info.column
+        );
+
+        if let Ok(line_content) = self.read_line(self.info.line) {
+            let line_num_str: String = self.info.line.to_string();
+            let gutter_width: usize = line_num_str.len();
+            let gutter_padding: String = " ".repeat(gutter_width);
+
+            println!("{cyan} {} |{reset}", gutter_padding);
+
+            println!("{cyan} {} |{reset} {}", line_num_str, line_content);
+
+            print!("{cyan} {} |{reset} ", gutter_padding);
+
+            for _ in 0..(self.info.column - gutter_width) {
+                print!(" ");
+            }
+
+            if let Some(h) = &self.hint {
+                println!("{yellow}^__ {}{reset}", h);
+            } else {
+                println!("{yellow}^{reset}");
+            }
+
+            println!("{cyan} {} |{reset}", gutter_padding);
+        }
+    }
+
+    fn read_line(&self, line: usize) -> io::Result<String> {
+        let file: File = File::open(&self.info.filename)?;
+        let reader: BufReader<File> = BufReader::new(file);
+
+        reader
+            .lines()
+            .nth(line - 1)
+            .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Line not found"))?
+    }
+}

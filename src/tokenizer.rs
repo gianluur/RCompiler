@@ -1,0 +1,564 @@
+use std::{char, collections::HashMap, iter::Peekable, str::Chars};
+
+use crate::error::*;
+use crate::interner::*;
+use crate::tokens::*;
+
+#[derive(Debug, PartialEq)]
+pub struct TokenizerError {
+    pub code: ErrorCode,
+    pub span: TokenSpan,
+    pub line: usize,
+    pub column: usize,
+}
+
+impl TokenizerError {
+    pub fn to_diagnostic(&self, filename: &str) -> Diagnostic {
+        Diagnostic {
+            kind: DiagnosticKind::Error(self.code),
+            info: DiagnosticInfo {
+                filename: filename.to_owned(),
+                line: self.line,
+                column: self.column,
+            },
+            hint: Some(self.get_hint(self.code)),
+        }
+    }
+
+    fn get_hint(&self, code: ErrorCode) -> &'static str {
+        match code {
+            ErrorCode::ET001 => "remove the extra '.'",
+            ErrorCode::ET002 => "add a space between the number and the identifier",
+            ErrorCode::ET003 => "add a '0' after the decimal or remove the point",
+            ErrorCode::ET004 => "this character is not supported in this position",
+            ErrorCode::ET005 => "if you intended to use a string, use double quotes \"\" instead",
+            ErrorCode::ET006 => "character literals cannot be empty; maybe you meant ' '?",
+            ErrorCode::ET007 => "add a closing single quote (') to end the character literal",
+            ErrorCode::ET008 => {
+                "escaped quotes like \\' do not count as closing quotes unless preceded by a valid escape"
+            }
+            ErrorCode::ET009 => "valid escapes include \\n, \\r, \\t, \\\\, \\0, \\', and \\\"",
+            ErrorCode::ET010 => "octal escapes must be in the range \\000 to \\377",
+            ErrorCode::ET011 => "hexadecimal escapes must follow the pattern \\xHH (e.g., \\x1A)",
+            ErrorCode::ET012 => "add a double quote (\") to the end of this line",
+            _ => "",
+        }
+    }
+}
+
+pub struct Tokenizer<'a, 'i> {
+    interner: &'i mut Interner,
+
+    source: &'a str,
+    input: Peekable<Chars<'a>>,
+    keywords: HashMap<&'a str, TokenKind>,
+
+    character: char,
+    start: usize,
+    end: usize,
+    is_parsing_string_literal: bool,
+
+    line: usize,
+    column: usize,
+}
+
+impl<'a, 'i> Tokenizer<'a, 'i> {
+    pub fn new(input: &'a str, interner: &'i mut Interner) -> Self {
+        let mut keywords: HashMap<&'static str, TokenKind> = HashMap::new();
+        keywords.insert("if", TokenKind::If);
+        keywords.insert("elif", TokenKind::ElseIf);
+        keywords.insert("else", TokenKind::Else);
+        keywords.insert("while", TokenKind::While);
+        keywords.insert("break", TokenKind::Break);
+        keywords.insert("continue", TokenKind::Continue);
+        keywords.insert("fn", TokenKind::Function);
+        keywords.insert("return", TokenKind::Return);
+        keywords.insert("const", TokenKind::Const);
+        keywords.insert("i8", TokenKind::Int8);
+        keywords.insert("i16", TokenKind::Int16);
+        keywords.insert("i32", TokenKind::Int32);
+        keywords.insert("i64", TokenKind::Int64);
+        keywords.insert("u8", TokenKind::UInt8);
+        keywords.insert("u16", TokenKind::UInt16);
+        keywords.insert("u32", TokenKind::UInt32);
+        keywords.insert("u64", TokenKind::UInt64);
+        keywords.insert("f32", TokenKind::Float32);
+        keywords.insert("f64", TokenKind::Float64);
+        keywords.insert("char", TokenKind::Character);
+        keywords.insert("str", TokenKind::String);
+        keywords.insert("bool", TokenKind::Boolean);
+        keywords.insert("null", TokenKind::Null);
+
+        Self {
+            interner,
+
+            source: input,
+            input: input.chars().peekable(),
+            keywords,
+
+            character: ' ',
+            start: 0,
+            end: 0,
+            is_parsing_string_literal: false,
+
+            line: 1,
+            column: 1,
+        }
+    }
+
+    pub fn tokenize(&mut self) -> Result<Vec<Token>, TokenizerError> {
+        let mut tokens: Vec<Token> = Vec::new();
+
+        while let Some(_) = self.next() {
+            if self.character.is_whitespace() {
+                self.start = self.end;
+                continue;
+            }
+            if let Some(token) = self.get_token()? {
+                tokens.push(token);
+                self.start = self.end;
+            }
+        }
+
+        if let Ok(token) = self.token(TokenKind::Eof) {
+            tokens.push(token.unwrap());
+        }
+
+        Ok(tokens)
+    }
+
+    fn get_token(&mut self) -> Result<Option<Token>, TokenizerError> {
+        if self.character.is_ascii_digit() {
+            self.parse_number()
+        } else if self.character.is_ascii_alphanumeric() || self.character == '_' {
+            self.parse_text()
+        } else {
+            self.parse_symbol()
+        }
+    }
+
+    fn parse_number(&mut self) -> Result<Option<Token>, TokenizerError> {
+        let mut dots: i8 = 0;
+
+        while let Some(next) = self.peek() {
+            if !(next.is_ascii_digit()) && next != '.' {
+                break;
+            }
+            if next == '.' {
+                dots += 1;
+            }
+            self.next().unwrap();
+        }
+
+        if dots > 1 {
+            return self.error(ErrorCode::ET001);
+        }
+
+        let mut invalid_found = false;
+        while let Some(next) = self.peek() {
+            if next.is_ascii_alphanumeric() || next == '_' {
+                self.next().unwrap();
+                invalid_found = true;
+            } else {
+                break;
+            }
+        }
+
+        if invalid_found {
+            return self.error(ErrorCode::ET002);
+        }
+
+        let literal: &str = &self.source[self.start..self.end];
+
+        if dots == 0 {
+            return self.token(TokenKind::IntegerLiteral);
+        } else {
+            if literal.ends_with('.') {
+                return self.error(ErrorCode::ET003);
+            }
+
+            return self.token(TokenKind::FloatLiteral);
+        }
+    }
+
+    fn parse_text(&mut self) -> Result<Option<Token>, TokenizerError> {
+        while let Some(next) = self.peek() {
+            if next.is_ascii_alphanumeric() || next == '_' {
+                self.next().unwrap();
+            } else {
+                break;
+            }
+        }
+
+        let literal: &str = &self.source[self.start..self.end];
+
+        if let Some(&keyword) = self.keywords.get(literal) {
+            return self.token(keyword);
+        } else if literal == "true" || literal == "false" {
+            return self.token(TokenKind::BooleanLiteral);
+        } else {
+            return self.token(TokenKind::Identifier);
+        }
+    }
+
+    fn parse_symbol(&mut self) -> Result<Option<Token>, TokenizerError> {
+        match self.character {
+            '+' => {
+                if self.match_next('=') {
+                    self.token(TokenKind::AdditionAssignment)
+                } else {
+                    self.token(TokenKind::Plus)
+                }
+            }
+
+            '-' => {
+                if self.match_next('=') {
+                    self.token(TokenKind::SubtractAssignment)
+                } else {
+                    self.token(TokenKind::Minus)
+                }
+            }
+
+            '*' => {
+                if self.match_next('=') {
+                    self.token(TokenKind::MultiplyAssignment)
+                } else {
+                    self.token(TokenKind::Multiplication)
+                }
+            }
+
+            '/' => {
+                if self.match_next('=') {
+                    self.token(TokenKind::DivideAssignment)
+                } else {
+                    self.token(TokenKind::Division)
+                }
+            }
+
+            '%' => {
+                if self.match_next('=') {
+                    self.token(TokenKind::ModulusAssignment)
+                } else {
+                    self.token(TokenKind::Modulus)
+                }
+            }
+
+            '&' => {
+                if self.match_next('=') {
+                    self.token(TokenKind::BitwiseAndAssignment)
+                } else if self.match_next('&') {
+                    self.token(TokenKind::And)
+                } else {
+                    self.token(TokenKind::BitwiseAnd)
+                }
+            }
+
+            '|' => {
+                if self.match_next('=') {
+                    self.token(TokenKind::BitwiseOrAssignment)
+                } else if self.match_next('|') {
+                    self.token(TokenKind::Or)
+                } else {
+                    self.token(TokenKind::BitwiseOr)
+                }
+            }
+
+            '^' => {
+                if self.match_next('=') {
+                    self.token(TokenKind::BitwiseXorAssignment)
+                } else {
+                    self.token(TokenKind::BitwiseXor)
+                }
+            }
+
+            '=' => {
+                if self.match_next('=') {
+                    self.token(TokenKind::Equal)
+                } else {
+                    self.token(TokenKind::Assignment)
+                }
+            }
+
+            '!' => {
+                if self.match_next('=') {
+                    self.token(TokenKind::NotEqual)
+                } else {
+                    self.token(TokenKind::Not)
+                }
+            }
+
+            '<' => {
+                if self.match_next('<') {
+                    if self.match_next('=') {
+                        self.token(TokenKind::BitwiseLShiftAssignment)
+                    } else {
+                        self.token(TokenKind::BitwiseLShift)
+                    }
+                } else if self.match_next('=') {
+                    self.token(TokenKind::LessThanOrEqual)
+                } else {
+                    self.token(TokenKind::LessThan)
+                }
+            }
+
+            '>' => {
+                if self.match_next('>') {
+                    if self.match_next('=') {
+                        self.token(TokenKind::BitwiseRShiftAssignment)
+                    } else {
+                        self.token(TokenKind::BitwiseRShift)
+                    }
+                } else if self.match_next('=') {
+                    self.token(TokenKind::GreaterThanOrEqual)
+                } else {
+                    self.token(TokenKind::GreaterThan)
+                }
+            }
+
+            '(' => self.token(TokenKind::LeftParen),
+            ')' => self.token(TokenKind::RightParen),
+            '[' => self.token(TokenKind::LeftBracket),
+            ']' => self.token(TokenKind::RightBracket),
+            '{' => self.token(TokenKind::LeftBrace),
+            '}' => self.token(TokenKind::RightBrace),
+            ',' => self.token(TokenKind::Comma),
+            '.' => self.token(TokenKind::Dot),
+            ';' => self.token(TokenKind::Semicolon),
+
+            '\'' => self.parse_char(),
+            '\"' => self.parse_string(),
+            '#' => self.parse_comment(),
+
+            _ => self.error(ErrorCode::ET004),
+        }
+    }
+
+    fn parse_char(&mut self) -> Result<Option<Token>, TokenizerError> {
+        let mut chars_count: u8 = 0;
+        let mut is_escaping_single_quote: bool = false;
+
+        while let Some(next) = self.peek() {
+            if next == '\'' {
+                self.next().unwrap();
+
+                if chars_count > 1 {
+                    return self.error(ErrorCode::ET005);
+                } else if chars_count == 0 {
+                    return self.error(ErrorCode::ET006);
+                }
+
+                is_escaping_single_quote = false;
+                break;
+            }
+
+            self.next().unwrap();
+
+            if next == '\\' {
+                is_escaping_single_quote = self.parse_inner_char()?;
+            }
+
+            chars_count += 1;
+        }
+
+        let literal: &str = &self.source[self.start..self.end];
+
+        if !literal.ends_with('\'') || literal.len() == 1 {
+            return self.error(ErrorCode::ET007);
+        } else if is_escaping_single_quote {
+            return self.error(ErrorCode::ET008);
+        }
+
+        self.token(TokenKind::CharLiteral)
+    }
+
+    fn parse_inner_char(&mut self) -> Result<bool, TokenizerError> {
+        if self.character == '\\' {
+            return self.parse_escape_sequence();
+        }
+
+        self.next().unwrap();
+        return Ok(false);
+    }
+
+    fn parse_escape_sequence(&mut self) -> Result<bool, TokenizerError> {
+        if let Some(next) = self.peek() {
+            self.next().unwrap();
+
+            match next {
+                'a' | 'b' | 'f' | 'n' | 'r' | 't' | 'v' | '\\' | '\'' | '\"' | '?' | '0' => {
+                    if next == '\'' {
+                        return Ok(true);
+                    }
+                }
+
+                '1'..='7' => self.parse_octal()?,
+
+                'x' => self.parse_hex()?,
+
+                _ => return self.error(ErrorCode::ET009),
+            };
+        }
+
+        Ok(false)
+    }
+
+    fn is_ascii_octal(&mut self, character: char) -> Option<char> {
+        match character {
+            '0'..='7' => Some(character),
+            _ => None,
+        }
+    }
+
+    fn parse_octal(&mut self) -> Result<(), TokenizerError> {
+        let mut is_invalid: bool = false;
+        let mut digit_count: u8 = 1;
+
+        while let Some(next) = self.peek() {
+            if next == '\'' || (self.is_parsing_string_literal && next == '\"') {
+                if is_invalid || digit_count > 3 {
+                    return self.error(ErrorCode::ET010);
+                }
+                break;
+            }
+
+            if !self.is_ascii_octal(next).is_some() {
+                is_invalid = true;
+            }
+
+            self.next().unwrap();
+            digit_count += 1;
+        }
+
+        Ok(())
+    }
+
+    fn parse_hex(&mut self) -> Result<(), TokenizerError> {
+        let mut is_invalid: bool = false;
+        let mut digit_count: u8 = 0;
+
+        while let Some(next) = self.peek() {
+            if next == '\'' || (self.is_parsing_string_literal && next == '\"') {
+                if digit_count > 2 || digit_count == 0 || is_invalid {
+                    return self.error(ErrorCode::ET011);
+                }
+                break;
+            }
+
+            if !next.is_ascii_hexdigit() {
+                if next == '\\' && digit_count == 2 {
+                    break;
+                }
+                is_invalid = true;
+            }
+
+            self.next().unwrap();
+            digit_count += 1;
+        }
+
+        Ok(())
+    }
+
+    fn parse_string(&mut self) -> Result<Option<Token>, TokenizerError> {
+        self.is_parsing_string_literal = true;
+
+        while let Some(next) = self.peek() {
+            if next == '\"' {
+                self.next().unwrap();
+                break;
+            }
+
+            self.next().unwrap();
+
+            if next == '\\' {
+                self.parse_inner_char()?;
+            }
+        }
+
+        let literal: &str = &self.source[self.start..self.end];
+
+        if !literal.ends_with('\"') || literal.len() == 1 {
+            return self.error(ErrorCode::ET012);
+        }
+
+        self.is_parsing_string_literal = false;
+
+        self.token(TokenKind::StringLiteral)
+    }
+
+    fn parse_comment(&mut self) -> Result<Option<Token>, TokenizerError> {
+        while let Some(next) = self.peek() {
+            if next == '\n' {
+                break;
+            }
+            self.next().unwrap();
+        }
+        Ok(None)
+    }
+
+    fn next(&mut self) -> Option<char> {
+        match self.input.next() {
+            Some(c) => {
+                if c == '\n' {
+                    self.line += 1;
+                    self.column = 1;
+                } else {
+                    self.column += 1;
+                }
+
+                self.character = c;
+                self.end += c.len_utf8();
+                Some(c)
+            }
+            None => None,
+        }
+    }
+
+    fn peek(&mut self) -> Option<char> {
+        match self.input.peek() {
+            Some(c) => Some(*c),
+            None => None,
+        }
+    }
+
+    fn token(&mut self, kind: TokenKind) -> Result<Option<Token>, TokenizerError> {
+        Ok(Some(Token {
+            kind,
+            span: TokenSpan::new(
+                self.start,
+                self.end,
+                self.store_literal(),
+                self.line,
+                self.column,
+            ),
+        }))
+    }
+
+    fn error<T>(&mut self, code: ErrorCode) -> Result<T, TokenizerError> {
+        Err(TokenizerError {
+            code,
+            span: TokenSpan::new(
+                self.start,
+                self.end,
+                self.store_literal(),
+                self.line,
+                self.column,
+            ),
+            line: self.line,
+            column: self.column,
+        })
+    }
+
+    fn match_next(&mut self, expected: char) -> bool {
+        if self.peek() == Some(expected) {
+            self.next();
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    fn store_literal(&mut self) -> SourceLiteral {
+        let raw_str: &str = &self.source[self.start..self.end];
+        self.interner.intern(raw_str)
+    }
+}
